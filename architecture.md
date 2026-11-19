@@ -1,0 +1,459 @@
+# Architecture — kyamlgen
+
+A form-driven Kubernetes YAML generator with cross-object semantic validation.
+
+## How to read this document
+
+- **§2** states what the tool must do, as testable requirements.
+- **§3** is the decision index: every design decision (D1…Dn) maps to an entry in
+  `INTENT.md` that records *why* it was taken.
+- **§4** is the system architecture. The rest of the document walks each layer in
+  the order data flows through it.
+- **§13** records what is built, what is not, and what comes next.
+- **§14** lists the open questions.
+
+`INTENT.md` is the append-only decision log. `architecture.md` is the design of record.
+Neither duplicates the other: this document says *what*, `INTENT.md` says *why*.
+
+Status: **M1 complete** — see §13.
+
+---
+
+## 1. Purpose and scope
+
+Writing Kubernetes YAML by hand is hard for two different reasons, and only one of
+them is a knowledge problem.
+
+1. **Knowledge** — which fields exist, what type they are, which are required, which
+   `apiVersion` is current, whether a field has been renamed. The Kubernetes API
+   schema already encodes all of this, so the form should be generated from the
+   schema rather than written by hand.
+2. **Coupling** — the same value has to appear in several places, and the places drift
+   silently. A Deployment whose `spec.selector.matchLabels` does not match its own
+   `spec.template.metadata.labels` deploys perfectly and manages zero pods. A Service
+   whose `targetPort` matches no container port serves 503s forever. No schema can
+   catch either, because each object is individually valid.
+
+`kyamlgen` solves (1) with a schema-driven form engine and solves (2) with a
+semantic engine that understands how Kubernetes objects reference each other.
+
+**In scope**
+
+- All top-level kinds in the bundled Kubernetes schema — currently 193 distinct
+  (group, kind) pairs across Kubernetes v1.25.0 – v1.37.0.
+- Generating single objects and multi-document bundles.
+- Validation in four layers, described in §8.
+- A local web application and a CLI.
+
+**Out of scope**
+
+- Applying to a cluster (deferred to M4 — see §13).
+- Custom Resource Definitions authored through the form (the schema for a CRD is
+  self-referential; the engine falls back to raw JSON for the recursive part, §6.3).
+- Hosting, accounts, persistence. The tool is local and stateless.
+
+---
+
+## 2. Requirements
+
+| # | Requirement |
+|---|---|
+| R1 | The form for any kind must be derived from the Kubernetes schema, so field names, types and required fields are the API's and cannot drift. |
+| R2 | Every kind in the schema bundle must be usable, including the ~130 kinds nobody hand-writes. |
+| R3 | Field descriptions from the schema must be shown, so the form doubles as documentation. |
+| R4 | The output must be valid YAML that `kubectl apply -f` accepts without hand-editing. |
+| R5 | Unknown fields, wrong types and invalid enum values must be caught before the user leaves the page. |
+| R6 | Cross-object agreements — selectors, ports, references, namespaces — must be checked across the whole bundle. |
+| R7 | The tool must work offline, with no cluster and no network. |
+| R8 | The tool must work with a browser but not require one; the CLI must expose the same capability. |
+| R9 | Objects that a controller normally owns must be marked as such, because authoring them is a deliberate and usually wrong choice. |
+| R10 | A field that the API server owns (`status`, `metadata.uid`, `resourceVersion`, …) must never be offered. |
+
+---
+
+## 3. Decision index
+
+| # | Decision | Log entry |
+|---|---|---|
+| D1 | Forms are generated from the bundled Kubernetes schema, with curated overlays | 2026-11-19 |
+| D2 | The tool is a local FastAPI application with a server-rendered shell and a JavaScript form renderer | 2026-11-19 |
+| D3 | Scope is every kind in the bundle, including controller-owned kinds | 2026-11-19 |
+| D4 | Schemas come from the `kubernetes-validate` bundle, offline | 2026-11-19 |
+| D5 | Validation runs in four layers | 2026-11-19 |
+| D6 | YAML is rendered with PyYAML, not ruamel.yaml | 2026-11-19 |
+| D7 | Cross-object rules live in a semantic engine, not in string substitution | 2026-11-19 |
+| D8 | The schema carries no enum data, so enums are curated by hand | 2026-11-19 |
+| D9 | `status` and other server-owned fields are never offered | 2026-11-19 |
+| D10 | The form is rendered by JavaScript from the widget tree; the server renders the page shell only | 2026-11-19 |
+| D11 | The schema bundle's file naming is irregular, so the kind index is authoritative | 2026-11-19 |
+
+---
+
+## 4. System architecture
+
+```
+Browser
+  ├── index.html          kind picker, grouped by category, searchable
+  ├── form.html           workbench: form on the left, YAML and issues on the right
+  ├── app.js              renders the form from the widget tree
+  └── picker.js           renders the kind catalogue
+      │  POST /api/render  {version, objects: [{apiVersion, kind, manifest}]}
+      ▼
+FastAPI (kyamlgen/app.py)
+  ├── schema service    (schemas.py)   locate the bundle, index kinds, resolve $ref
+  ├── form engine       (widgets.py)   schema → widget tree
+  ├── kind registry     (registry.py)  scope, plural, ownership, categories
+  ├── validator         (validate.py)  form-time + JSON Schema
+  ├── semantic engine   (semantics.py) cross-object rules
+  └── renderer          (render.py)    dict → ordered YAML → multi-document bundle
+```
+
+The browser holds the form state and posts the resulting objects. The server never
+reconstructs the form from posted markup; it re-derives the widget tree from the
+schema, so the tree is always consistent with the schema bundle.
+
+---
+
+## 5. Schema service (`schemas.py`)
+
+### 5.1 The bundle
+
+`kubernetes-validate` ships the upstream Kubernetes OpenAPI schemas as an
+installable package: v1.25.0 through v1.37.0, in two variants per version.
+
+| Variant | Meaning |
+|---|---|
+| `v1.31.0-local` | Permissive. Unknown fields are accepted. |
+| `v1.31.0-local-strict` | `additionalProperties: false` on 622 of the 635 definitions. Unknown fields are rejected. |
+
+`kyamlgen` always loads the **strict** variant (D5). Rejecting an unknown field at
+the point of entry is worth far more than accepting one.
+
+### 5.2 Locating a kind's schema
+
+The bundle names files `{kind}-{first-label-of-group}-{version}.json`, so
+`networking.k8s.io/v1` collapses to `networking-v1` and the core group collapses to
+plain `v1`. The naming is *almost* regular — the `meta.k8s.io` kinds are stored as
+`apigroup-meta-v1.json` — so the derived name is only a fast path. The authoritative
+answer comes from the **kind index** (D11): every file is read once for its
+`x-kubernetes-group-version-kind` marker, giving a `(group, version, kind)` →
+filename map. Scanning 635 files costs about 60 ms and is memoised.
+
+### 5.3 `$ref` resolution
+
+References inside the bundle take three forms, all of which resolve to the same
+`$defs` table:
+
+```
+#/$defs/io.k8s.api.core.v1.Container
+/api/_definitions.json#/$defs/io.k8s.api.core.v1.Container
+https://kubernetes.io/api/_definitions.json#/$defs/io.k8s.api.core.v1.Container
+```
+
+`SchemaBundle.resolve()` follows a reference and merges any sibling keys (usually
+`description`) over the resolved definition.
+
+### 5.4 What the schema does *not* contain
+
+Three gaps, each of which needed its own answer:
+
+- **No enums.** Not one definition in the bundle has an `enum`. Permitted values
+  exist only in prose. See §6.4 (D8).
+- **No numeric bounds.** `port` has no `minimum`. See §6.5.
+- **No required-ness for `ObjectMeta.name`.** The schema declares no required fields
+  on `ObjectMeta` at all, but an object without a name cannot be created. See §6.6.
+
+---
+
+## 6. Form engine (`widgets.py`)
+
+### 6.1 The widget tree
+
+The engine turns a resolved schema node into a JSON widget tree:
+
+```json
+{
+  "id": "w42",
+  "name": "image",
+  "path": ["spec", "template", "spec", "containers", "*", "image"],
+  "kind": "string",
+  "label": "Image",
+  "description": "Container image name. More info: https://kubernetes.io/...",
+  "required": true,
+  "advanced": false
+}
+```
+
+`kind` is one of `string`, `text`, `integer`, `number`, `boolean`, `select`,
+`quantity`, `int-or-string`, `datetime`, `object`, `array`, `map` or `json`.
+
+### 6.2 Schema → widget mapping
+
+| Schema shape | Widget |
+|---|---|
+| `enum` present | `select` |
+| `type: integer` / `number` | `integer` / `number`, with bounds where known |
+| `type: boolean` | `boolean` |
+| `type: string` | `string`, or `datetime` when `format: date-time` |
+| `$ref` → `intstr.IntOrString` | `int-or-string` |
+| `$ref` → `resource.Quantity` | `quantity` |
+| object with `properties` | `object`, recursing into children |
+| object with `additionalProperties: <schema>` | `map` — a key/value editor |
+| object with `x-kubernetes-preserve-unknown-fields` | `json` |
+| array of `$ref` | `array` with an item template |
+| array of `string` | `array` of scalars |
+
+`IntOrString` and `Quantity` are recognised by the definition they point at, not by
+the inline `x-kubernetes-int-or-string` marker — that marker appears only twice in
+the whole bundle.
+
+### 6.3 The recursion guard
+
+A `CustomResourceDefinition` embeds a `JSONSchemaProps`, which embeds another
+`JSONSchemaProps`, and so on. The builder keeps a stack of the definition names
+currently being expanded and falls back to a raw JSON editor when a definition
+repeats. Without this, the walk never terminates.
+
+### 6.4 Curated enums (D8)
+
+Because the bundle carries no enum data, a curated table restores the permitted
+values for the fields where a wrong value is rejected only by the API server:
+`ServiceSpec.type`, `Container.imagePullPolicy`, `PodSpec.restartPolicy`,
+`ContainerPort.protocol`, `HTTPIngressPath.pathType`, `PersistentVolumeClaimSpec.accessModes`,
+and about twenty more. The values are rendered as a dropdown, so a typo becomes
+impossible rather than merely detectable.
+
+### 6.5 Curated bounds
+
+Numeric ranges come from the API documentation rather than the schema: ports
+1–65535, `nodePort` 30000–32767, `replicas` ≥ 0.
+
+### 6.6 Required fields
+
+A field is required when the schema says so, when a definition is in the
+practically-required table (`Container.image`, `ServicePort.port`,
+`IngressServiceBackend.name`), or when it is the top-level `metadata.name`.
+
+### 6.7 Field visibility
+
+A definition may name the properties that are shown by default; everything else is
+folded into an "advanced" disclosure. This is an **allow-list** on purpose. The
+Kubernetes schema keeps growing — v1.37 already carries alpha fields such as
+`evictionResponders` and `hostnameOverride` — and a deny-list would surface every new
+field to somebody who just wants to set an image.
+
+### 6.8 Server-owned fields (D9)
+
+Never offered: `status`, and the `ObjectMeta` fields the API server owns
+(`uid`, `resourceVersion`, `creationTimestamp`, `managedFields`, `generation`,
+`selfLink`, `deletionTimestamp`, `deletionGracePeriodSeconds`). `finalizers` and
+`ownerReferences` are real authoring fields but are hidden behind "advanced".
+
+---
+
+## 7. Kind registry (`registry.py`)
+
+The schema describes shape, not semantics. The registry supplies what the schema
+cannot:
+
+- **Scope** — namespaced or cluster-scoped.
+- **Plural** — `Ingress` → `ingresses`, `NetworkPolicy` → `networkpolicies`, with
+  irregulars in a table and regular rules (`s`/`x`/`ch`/`sh` → `+es`, consonant + `y`
+  → `ies`) for the rest.
+- **Ownership** — which controller normally creates this kind. `Pod` is normally
+  created by a Deployment, `ReplicaSet` by a Deployment, `Node` by the kubelet.
+  Authoring one means taking over that controller's job, which the form says so
+  (R9).
+- **Not authorable** — `Node`, `ComponentStatus`, the `*Review` kinds. A hand-written
+  Node manifest is rejected in practice and teaches nothing.
+- **Category** — for the kind picker.
+
+---
+
+## 8. Validation (D5)
+
+Four layers, because each catches a class the others cannot.
+
+| # | Layer | Catches | Needs a cluster? |
+|---|---|---|---|
+| 1 | Form-time (`validate.py`) | missing required fields, out-of-range ports, malformed names and labels, bad quantity syntax, invalid enum values | no |
+| 2 | JSON Schema, strict variant | unknown fields, wrong types, invalid shapes | no |
+| 3 | Semantic (`semantics.py`) | selector/label mismatches, `targetPort` matching no container port, dangling references, namespace ambiguity | no |
+| 4 | Server dry-run | admission control, defaulting, real API-server rejection | **yes** (M4) |
+
+### 8.1 A subtlety in the form-time layer
+
+A missing object must not make its own required children look missing. `lifecycle`
+is optional, and nothing inside it is required, so an absent `lifecycle` must not
+produce *"Port is required"* from `lifecycle.preStop.tcpSocket.port`. The tree walk
+therefore descends only into objects that are present, and treats a present-but-empty
+object as genuinely incomplete.
+
+### 8.2 A gap in the JSON Schema layer
+
+Whether a top-level `spec` is required is **version-dependent**. The v1.37.0 schemas
+mark it required, so a `Deployment` with no `spec` is rejected; the v1.31.0 and
+v1.36.0 schemas do not, and the same manifest passes. This is a property of the
+upstream schemas, not of the tool.
+
+The tool enforces the rules of the version you selected, which is the right behaviour:
+a manifest written for v1.31.0 should be judged by v1.31.0's rules. Layer 4 closes
+the question definitively.
+
+---
+
+## 9. Semantic engine (`semantics.py`)
+
+Rules that compare objects against each other. Errors are reserved for agreements
+the API server itself would reject or that would silently break traffic; everything
+else is a warning.
+
+| Code | Rule | Level |
+|---|---|---|
+| `selector-template-mismatch` | A workload's `selector.matchLabels` must match its own pod template labels | error |
+| `service-selector-unmatched` | A Service's selector must match a workload in the bundle | error |
+| `service-empty-selector` | A Service with no selector routes to nothing | warning |
+| `service-selector-unverifiable` | No workload in the bundle, so the match cannot be checked | warning |
+| `target-port-unmatched` | `targetPort` must match a container port, by number or by name | error |
+| `ingress-backend-missing` | An Ingress backend must reference a Service in the bundle | error |
+| `ingress-backend-port-missing` | …on a port that Service actually exposes | error |
+| `ingress-backend-unverifiable` | No Service in the bundle | warning |
+| `scaler-target-missing` | An HPA must target a workload in the bundle | warning |
+| `dangling-reference` | A referenced ConfigMap, Secret or PVC is not in the bundle | warning |
+| `namespace-mismatch` | Objects in one bundle disagree about their namespace | warning |
+| `image-no-tag` | An image has no tag, so it resolves to `:latest` | warning |
+| `no-probe` | A long-running workload container has no health probe | warning |
+| `limit-without-request` | Resource limits without requests | warning |
+
+"Dangling" references are warnings rather than errors because the referenced object
+may already exist in the cluster; the tool can only see the bundle.
+
+---
+
+## 10. Renderer (`render.py`)
+
+### 10.1 Key order (D6)
+
+The schemas list properties alphabetically, which produces `image` before `name`
+inside a container. The renderer applies a preference list so the output reads the
+way manifests are conventionally written. User-keyed maps — `ConfigMap.data`,
+`metadata.labels`, `metadata.annotations` — keep the user's own ordering.
+
+### 10.2 String quoting (D6)
+
+Kubernetes parses YAML through go-yaml v2, which follows YAML 1.1, where a bare
+`on`, `yes` or `no` is a boolean. A ConfigMap value of `on` written unquoted arrives
+in the pod as `true`.
+
+PyYAML's 1.1 resolver quotes such strings automatically (`feature: 'on'`).
+`ruamel.yaml` in 1.2 mode would not, and would silently corrupt the value. This is
+the whole reason the project uses PyYAML, and it is covered by a test.
+
+### 10.3 Pruning
+
+Empty strings, empty lists, empty maps and empty objects are removed so the YAML
+contains only what the user filled in. Validation still runs against the *unpruned*
+object, so a required field that was never touched is still reported.
+
+---
+
+## 11. Web application (`app.py`)
+
+| Route | Purpose |
+|---|---|
+| `GET /` | Kind picker, grouped by category, searchable |
+| `GET /form?apiVersion=&kind=` | The workbench |
+| `GET /api/kinds` | The kind catalogue |
+| `GET /api/tree` | The widget tree for a kind |
+| `POST /api/render` | Validate a bundle of objects and return YAML plus issues |
+| `POST /api/validate` | Validate pasted YAML and re-render it canonically |
+| `GET /healthz` | Liveness |
+
+The workbench holds a list of objects, so a Deployment and its Service are generated
+together and checked against each other. The output pane shows the YAML and every
+issue, tagged with the object it belongs to.
+
+### 11.1 Why the form is rendered by JavaScript (D10)
+
+The widget tree is JSON, and the browser has it. Rendering the form from the tree in
+JavaScript means there is exactly one implementation of the widget rules. A
+server-rendered form would need a second implementation of the same rules in Jinja,
+and the two would drift.
+
+The cost is that the form needs JavaScript. For a local developer tool that is the
+right trade.
+
+---
+
+## 12. Module layout
+
+```
+src/kyamlgen/
+  schemas.py     schema bundle access, kind index, $ref resolution
+  widgets.py     schema → widget tree, curated overlays
+  registry.py    scope, plural, ownership, categories
+  validate.py    form-time checks, JSON Schema validation
+  semantics.py   cross-object rules
+  render.py      pruning, key ordering, YAML output
+  app.py         FastAPI routes
+  cli.py         serve / kinds / tree / generate / validate
+  templates/     base.html, index.html, form.html
+  static/
+    style.css    the whole stylesheet
+    formstate.js pure data-path logic, shared by the browser and the Node tests
+    app.js       renders the form from the widget tree
+    picker.js    renders the kind catalogue
+tests/
+  test_schemas.py    bundle layout, file naming, $ref resolution, kind index
+  test_widgets.py    widget mapping, required fields, visibility, recursion guard
+  test_validation.py form-time checks, schema validation, every semantic rule
+  test_render.py     key ordering, YAML 1.1 quoting, pruning, multi-document output
+  test_api.py        end-to-end HTTP behaviour
+  test_javascript.py runs the Node tests below
+  js/formstate.test.js  the form's path arithmetic, under `node --test`
+```
+
+### 12.1 Why the form's data logic is a separate file
+
+Every bug found while building the form lived in the path arithmetic — the code that
+decides where in the nested object a value belongs — and not in the DOM code. One of
+them was the worst kind: the renderer created the intermediate objects it walked
+through, so every advanced field it merely *displayed* appeared in the submitted data
+as an empty object, and the server duly reported the missing required fields inside
+them as real errors. The user saw twenty phantom problems on an empty form.
+
+`formstate.js` holds that arithmetic and nothing else, so it can be tested without a
+browser. `node --test tests/js/` runs those tests, and `test_javascript.py` runs them
+from pytest, so `uv run pytest` still covers the whole project.
+
+---
+
+## 13. Status and milestones
+
+| Milestone | Scope | Status |
+|---|---|---|
+| M0 | Repo skeleton, schema service, kind registry, vertical slice | **done** |
+| M1 | Generic form engine: widget mapping, fragments, arrays, maps, quantity and int-or-string widgets | **done** |
+| M2 | Semantic engine, cross-object checks, multi-object bundles | **done** (bundles and semantics); shared-value propagation still to do |
+| M3 | Four-layer validation surfaced inline; raw-YAML mode for every kind | **partial** — layers 1–3 done, raw-YAML paste mode done, per-kind raw editor not done |
+| M4 | Apply service (`kubectl --dry-run=server`, then apply) | **not started** — needs a local cluster (`kind`); Docker is already installed |
+| M5 | Ownership advisories, manifest library, Kustomize export | **partial** — advisories done; library and Kustomize export not started |
+
+---
+
+## 14. Open questions
+
+1. **Shared-value propagation.** The bundle model lets a Deployment and a Service be
+   generated together, but the labels and ports are still typed twice. Should
+   selecting a Service from a Deployment pre-fill its selector and ports from the
+   Deployment's template? This is the remaining half of the coupling story.
+2. **Server dry-run.** M4 needs a cluster. `kind` is the cheapest path on this
+   machine — Docker is installed and the image is about a gigabyte. Should the
+   tool require a cluster for M4 to count as done, or is a graceful "no cluster
+   reachable" acceptable?
+3. **Kustomize export.** `kubectl` here already bundles kustomize v5.8.1. Emitting a
+   `kustomization.yaml` alongside the generated manifests would make the output
+   composable. Worth doing in M5?
+4. **Which Kubernetes version is the default?** The tool currently defaults to the
+   newest in the bundle (v1.37.0) while the installed `kubectl` is v1.36.1.
+   Defaulting to the client's version would need a cluster to detect.

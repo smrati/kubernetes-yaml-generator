@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}kyamlgen — choose a kind{% endblock %}
+{% block content %}
+<section class="picker">
+  <div class="picker-head">
+    <h1>Choose a resource kind</h1>
+    <input
+      type="search"
+      id="kind-search"
+      class="search"
+      placeholder="Search 161 kinds — try Deployment, Ingress, CronJob…"
+      autocomplete="off"
+    />
+  </div>
+  <p class="muted picker-hint">
+    Every kind in the bundled Kubernetes schema is available. The form is generated
+    from the schema itself, so field names, types and required fields are the API's,
+    not ours.
+  </p>
+  <div id="kind-groups"></div>
+</section>
+<script>
+  window.KINDS = {{ kinds | tojson }};
+</script>
+<script src="/static/picker.js"></script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}kyamlgen — {{ kind }}{% endblock %}
+{% block content %}
+<section class="workbench">
+  <aside class="pane pane-form">
+    <div class="pane-head">
+      <div>
+        <h1>{{ kind }}</h1>
+        <div class="badges">
+          <span class="badge">{{ api_version }}</span>
+          {% if info.namespaced %}
+            <span class="badge badge-muted">namespaced</span>
+          {% else %}
+            <span class="badge badge-muted">cluster-scoped</span>
+          {% endif %}
+          {% if not info.authorable %}
+            <span class="badge badge-warn">not usually authored</span>
+          {% endif %}
+        </div>
+      </div>
+      <a class="btn btn-ghost" href="/">&larr; All kinds</a>
+    </div>
+
+    {% if info.note %}
+      <p class="advisory">{{ info.note }}</p>
+    {% endif %}
+
+    <div id="objects" class="objects"></div>
+    <div class="objects-add">
+      <select id="add-kind" class="select"></select>
+      <button id="add-object" class="btn">+ Add object</button>
+    </div>
+
+    <div id="form" class="form"></div>
+  </aside>
+
+  <aside class="pane pane-output">
+    <div class="pane-head">
+      <h2>Output</h2>
+      <div class="spacer"></div>
+      <button id="copy" class="btn btn-ghost">Copy</button>
+      <button id="download" class="btn btn-ghost">Download</button>
+    </div>
+    <div id="issues" class="issues"></div>
+    <pre id="yaml" class="yaml"></pre>
+  </aside>
+</section>
+
+<script>
+  window.KYAMLGEN = {
+    tree: {{ tree | tojson }},
+    apiVersion: {{ api_version | tojson }},
+    kind: {{ kind | tojson }},
+    version: {{ version | tojson }}
+  };
+</script>
+<script src="/static/formstate.js"></script>
+<script src="/static/app.js"></script>
+{% endblock %}
