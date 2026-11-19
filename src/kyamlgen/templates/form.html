@@ -44,6 +44,26 @@
       </p>
     {% endif %}
 
+    {% if tutorial %}
+      <details class="tutorial" id="tutorial" open>
+        <summary>
+          <span class="tutorial-title">About {{ kind }}</span>
+          <span class="tutorial-summary">{{ tutorial.summary }}</span>
+        </summary>
+        <div class="tutorial-body">
+          {% if tutorial.lead_html %}
+            <div class="tutorial-lead">{{ tutorial.lead_html | safe }}</div>
+          {% endif %}
+          {% for heading, body in tutorial.sections %}
+            <details class="tutorial-section">
+              <summary>{{ heading }}</summary>
+              <div class="tutorial-section-body">{{ body | safe }}</div>
+            </details>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+
     <div id="objects" class="objects"></div>
     <div class="objects-add">
       <select id="add-kind" class="select"></select>

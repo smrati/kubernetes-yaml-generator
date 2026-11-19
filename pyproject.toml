@@ -11,6 +11,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "pyyaml>=6.0",
     "jsonschema>=4.23",
+    "markdown>=3.7",
     "referencing>=0.35",
     "kubernetes-validate>=1.36",
 ]

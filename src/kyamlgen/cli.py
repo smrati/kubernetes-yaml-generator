@@ -25,6 +25,7 @@ from .schemas import (
     load_bundle,
 )
 from .semantics import analyse
+from .tutorials import tutorial_for
 from .validate import Issue, SchemaValidator, check_form
 from .widgets import WidgetBuilder
 
@@ -64,6 +65,27 @@ def cmd_tree(args: argparse.Namespace) -> int:
     tree = WidgetBuilder(bundle).build(args.kind, args.api_version)
     json.dump(tree, sys.stdout, indent=2)
     sys.stdout.write("\n")
+    return 0
+
+
+def cmd_tutorial(args: argparse.Namespace) -> int:
+    """Print the tutorial for a kind."""
+    version = args.version or default_version()
+    api_version = args.api_version
+    if not api_version:
+        for ref in kind_index(version).values():
+            if ref.kind == args.kind:
+                api_version = ref.api_version
+                break
+    if not api_version:
+        print(f"error: unknown kind '{args.kind}'", file=sys.stderr)
+        return 2
+
+    tutorial = tutorial_for(args.kind, api_version, version)
+    if tutorial is None:
+        print(f"error: unknown kind '{args.kind}'", file=sys.stderr)
+        return 2
+    sys.stdout.write(tutorial.to_text())
     return 0
 
 
@@ -206,6 +228,12 @@ def build_parser() -> argparse.ArgumentParser:
     preset = sub.add_parser("preset", help="Print one kind's template.")
     preset.add_argument("kind")
     preset.set_defaults(func=cmd_preset)
+
+    tutorial = sub.add_parser("tutorial", help="Print the tutorial for a kind.")
+    tutorial.add_argument("kind")
+    tutorial.add_argument("--api-version", default=None)
+    tutorial.add_argument("--k8s-version", dest="version", default=None)
+    tutorial.set_defaults(func=cmd_tutorial)
 
     validate = sub.add_parser("validate", help="Validate a YAML manifest.")
     validate.add_argument("path", nargs="?", default="-")

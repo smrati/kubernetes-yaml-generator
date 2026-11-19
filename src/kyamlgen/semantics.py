@@ -10,6 +10,7 @@ The rules below encode the agreements Kubernetes expects between objects.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from .validate import Issue
@@ -28,6 +29,263 @@ SELECTOR_WORKLOADS = TEMPLATE_WORKLOADS
 
 #: Long-running workloads where a health probe is expected.
 PROBE_EXPECTED = {"Deployment", "StatefulSet", "DaemonSet"}
+
+#: Kinds that own a pod template, and so can have containers in them.
+POD_OWNING = TEMPLATE_WORKLOADS | {"CronJob", "Pod"}
+
+
+@dataclass(frozen=True)
+class Relationship:
+    """A connection between two kinds, and the check that catches a mismatch.
+
+    The rule table says which kinds a *check* applies to.  This says which kinds
+    actually reference each other.  They are different questions: "a Deployment has
+    no image tag" concerns a Deployment on its own, while "a Service finds your
+    pods" relates a Service and a Deployment.
+
+    The relationship is directional — one side initiates, the other is referenced —
+    because the counterpart set depends on which side you are looking at.  For a
+    Deployment the counterpart of the ConfigMap relationship is "ConfigMap"; for a
+    ConfigMap it is "the kinds that can reference me".
+    """
+
+    initiator: tuple[str, ...]
+    target: tuple[str, ...]
+    sentence: str
+    rule: str | None = None
+
+    def counterpart(self, kind: str) -> tuple[str, ...] | None:
+        """The other side of the relationship, from one kind's point of view."""
+        if kind in self.initiator:
+            return self.target
+        if kind in self.target:
+            return self.initiator
+        return None
+
+
+#: The connections a learner needs to know about, in teaching order.
+#:
+#: The sentences are written so the same line reads correctly on both sides.
+RELATIONSHIPS: tuple[Relationship, ...] = (
+    Relationship(
+        ("Service",),
+        POD_OWNING,
+        "A Service finds the pods it routes to by their labels, so the labels on "
+        "your pods and the Service's selector have to agree.",
+        "service-selector-unmatched",
+    ),
+    Relationship(
+        ("Service",),
+        POD_OWNING,
+        "A Service reaches your containers through targetPort, so it has to name a "
+        "port they actually open.",
+        "target-port-unmatched",
+    ),
+    Relationship(
+        ("Ingress",),
+        ("Service",),
+        "An Ingress routes HTTP traffic to a Service by name, and to a port that Service exposes.",
+        "ingress-backend-missing",
+    ),
+    Relationship(
+        ("HorizontalPodAutoscaler",),
+        ("Deployment", "StatefulSet", "ReplicaSet"),
+        "A HorizontalPodAutoscaler changes how many replicas a workload has, and "
+        "the workload has to implement the scale subresource.",
+        "scaler-target-missing",
+    ),
+    Relationship(
+        POD_OWNING,
+        ("ConfigMap",),
+        "A pod template can read a ConfigMap for its configuration. If the "
+        "ConfigMap is not there, the pod cannot start.",
+        "dangling-reference",
+    ),
+    Relationship(
+        POD_OWNING,
+        ("Secret",),
+        "A pod template can read a Secret for its credentials. If the Secret is not "
+        "there, the pod cannot start.",
+        "dangling-reference",
+    ),
+    Relationship(
+        POD_OWNING,
+        ("PersistentVolumeClaim",),
+        "A pod template can mount a PersistentVolumeClaim for its storage. If the "
+        "claim is not there, the pod stays Pending.",
+        "dangling-reference",
+    ),
+    Relationship(
+        ("PodDisruptionBudget",),
+        POD_OWNING,
+        "A PodDisruptionBudget selects the pods it protects, so it has to select "
+        "them the same way a Service does.",
+        "pdb-selector-unmatched",
+    ),
+    Relationship(
+        ("RoleBinding",),
+        ("Role", "ClusterRole", "ServiceAccount"),
+        "A RoleBinding grants a role to a subject, so the role and the service "
+        "account both have to exist.",
+        "role-binding-ref-missing",
+    ),
+    Relationship(
+        ("ClusterRoleBinding",),
+        ("ClusterRole", "ServiceAccount"),
+        "A ClusterRoleBinding grants a cluster role to a subject, so the role and "
+        "the service account both have to exist.",
+        "cluster-role-binding-ref-missing",
+    ),
+)
+
+
+def relationships_for(kind: str) -> list[dict[str, Any]]:
+    """The relationships a kind takes part in, with the other side named."""
+    out: list[dict[str, Any]] = []
+    for relationship in RELATIONSHIPS:
+        other = relationship.counterpart(kind)
+        if other is None:
+            continue
+        out.append(
+            {
+                "kinds": list(other),
+                "sentence": relationship.sentence,
+                "rule": relationship.rule,
+            }
+        )
+    return out
+
+
+@dataclass(frozen=True)
+class Rule:
+    """One cross-object rule, and the kinds it concerns.
+
+    The tutorial's "how it connects" section is derived from this table, so the
+    tutorial and the checker cannot drift apart: there is one description of each
+    rule and both the code and the prose read it.
+    """
+
+    code: str
+    kinds: frozenset[str]
+    summary: str
+
+    def involves(self, kind: str) -> bool:
+        return "*" in self.kinds or kind in self.kinds
+
+    def others(self, kind: str) -> list[str]:
+        """The other kinds this rule connects, for a given kind."""
+        if "*" in self.kinds:
+            return []
+        return sorted(self.kinds - {kind})
+
+
+#: Every rule the semantic engine can raise.
+#:
+#: ``kinds`` names the kinds a rule connects.  A rule that relates two kinds lists
+#: both, which is what lets the tutorial say "a Service connects to a Deployment"
+#: without anyone maintaining a second list.
+RULES: tuple[Rule, ...] = (
+    Rule(
+        "selector-template-mismatch",
+        frozenset({"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job"}),
+        "A workload's selector must match the labels on its own pod template. "
+        "If it does not, the workload manages no pods at all — and it still "
+        "reports them as Running.",
+    ),
+    Rule(
+        "service-empty-selector",
+        frozenset({"Service"}),
+        "A Service with no selector routes to nothing. That is sometimes what "
+        "you want (an ExternalName Service, or manual endpoints), and often not.",
+    ),
+    Rule(
+        "service-selector-unmatched",
+        frozenset({"Service"} | POD_OWNING),
+        "A Service selects pods by their labels, not by name. Its selector has "
+        "to match the labels on the pods it is meant to route to, or the Service "
+        "gets no endpoints and every request times out.",
+    ),
+    Rule(
+        "target-port-unmatched",
+        frozenset({"Service"} | POD_OWNING),
+        "A Service's targetPort has to reach a port the container actually opens "
+        "— either the number, or the name of a named container port.",
+    ),
+    Rule(
+        "dangling-reference",
+        frozenset(POD_OWNING | {"ConfigMap", "Secret", "PersistentVolumeClaim"}),
+        "A pod template that references a ConfigMap, a Secret or a PVC needs "
+        "that object to exist, or the pod cannot start.",
+    ),
+    Rule(
+        "ingress-backend-missing",
+        frozenset({"Ingress", "Service"}),
+        "An Ingress routes to a Service by name. If the Service is not there, "
+        "the Ingress is accepted and serves 503s.",
+    ),
+    Rule(
+        "ingress-backend-port-missing",
+        frozenset({"Ingress", "Service"}),
+        "An Ingress backend points at a Service *and* a port. The Service has to expose that port.",
+    ),
+    Rule(
+        "scaler-target-missing",
+        frozenset({"HorizontalPodAutoscaler", "Deployment", "StatefulSet", "ReplicaSet"}),
+        "A HorizontalPodAutoscaler scales a named workload. The workload has to "
+        "exist, and it has to implement the scale subresource.",
+    ),
+    Rule(
+        "role-binding-ref-missing",
+        frozenset({"RoleBinding", "Role", "ClusterRole", "ServiceAccount"}),
+        "A RoleBinding grants a role to a subject. If the role or the service "
+        "account is not there, the binding is accepted and grants nothing.",
+    ),
+    Rule(
+        "cluster-role-binding-ref-missing",
+        frozenset({"ClusterRoleBinding", "ClusterRole", "ServiceAccount"}),
+        "A ClusterRoleBinding grants a cluster-scoped role to a subject. If the "
+        "role or the service account is not there, the binding grants nothing.",
+    ),
+    Rule(
+        "pdb-selector-unmatched",
+        frozenset({"PodDisruptionBudget"} | POD_OWNING),
+        "A PodDisruptionBudget selects the pods it protects. If the selector "
+        "matches nothing, it protects nothing and still looks correct.",
+    ),
+    Rule(
+        "namespace-mismatch",
+        frozenset({"*"}),
+        "Objects in one file are usually applied to one namespace. A file where "
+        "some objects name a namespace and others do not is ambiguous.",
+    ),
+    Rule(
+        "image-no-tag",
+        frozenset(POD_OWNING),
+        "An image with no tag resolves to :latest, which moves under you without "
+        "the manifest changing. Pin a tag or a digest.",
+    ),
+    Rule(
+        "no-probe",
+        frozenset(PROBE_EXPECTED),
+        "A long-running container with no probe gives Kubernetes no way to tell "
+        "whether it is working. A failing container and a working one look the "
+        "same.",
+    ),
+    Rule(
+        "limit-without-request",
+        frozenset(POD_OWNING),
+        "A limit without a request makes the scheduler place the pod as if it "
+        "were using the limit, which is usually not what you meant.",
+    ),
+)
+
+#: Rule codes, for lookup.
+RULE_BY_CODE = {rule.code: rule for rule in RULES}
+
+
+def rules_for(kind: str) -> list[Rule]:
+    """The rules that concern a kind."""
+    return [rule for rule in RULES if rule.involves(kind)]
 
 
 def _get(obj: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -117,6 +375,8 @@ def analyse(objects: list[dict[str, Any]]) -> list[Issue]:
     issues.extend(_check_service_selectors(services, workloads))
     issues.extend(_check_service_ports(services, workloads))
     issues.extend(_check_references(objects, config_maps, secrets, claims))
+    issues.extend(_check_bindings(objects))
+    issues.extend(_check_disruption_budgets(objects, workloads))
     issues.extend(_check_ingress_backends(objects, services))
     issues.extend(_check_scalers(objects, workloads))
     issues.extend(_check_namespaces(objects))
@@ -433,6 +693,101 @@ def _check_scalers(objects: list[dict[str, Any]], workloads: list[dict[str, Any]
                     object_index=index,
                 )
             )
+    return issues
+
+
+def _check_disruption_budgets(
+    objects: list[dict[str, Any]], workloads: list[dict[str, Any]]
+) -> list[Issue]:
+    """A PodDisruptionBudget that selects nothing protects nothing.
+
+    A budget whose selector matches no pod lets every pod be evicted at once, which
+    is the opposite of what it was written to do — and it does so silently.
+    """
+    issues: list[Issue] = []
+    if not workloads:
+        return issues
+    for index, obj in enumerate(objects):
+        if obj.get("kind") != "PodDisruptionBudget":
+            continue
+        selector = _get(obj, "spec", "selector", "matchLabels", default={}) or {}
+        if not selector:
+            continue
+        matched = any(
+            all(template_labels(workload).get(key) == value for key, value in selector.items())
+            for workload in workloads
+        )
+        if not matched:
+            issues.append(
+                Issue(
+                    level="warning",
+                    code="pdb-selector-unmatched",
+                    message=(
+                        f"PodDisruptionBudget selects "
+                        f"{_format_selector(selector)} but no workload in this bundle "
+                        f"carries those labels, so it protects nothing."
+                    ),
+                    path=["spec", "selector", "matchLabels"],
+                    object_index=index,
+                )
+            )
+    return issues
+
+
+def _check_bindings(objects: list[dict[str, Any]]) -> list[Issue]:
+    """A binding needs a role and a subject that exist.
+
+    A ``RoleBinding`` whose ``roleRef`` names a Role that is not there is accepted
+    by the API server and grants nothing at all — which is a silent failure, not an
+    error.
+    """
+    issues: list[Issue] = []
+    roles = {_name(obj) for obj in objects if obj.get("kind") in ("Role", "ClusterRole")}
+    accounts = {_name(obj) for obj in objects if obj.get("kind") == "ServiceAccount"}
+
+    for index, obj in enumerate(objects):
+        kind = obj.get("kind")
+        if kind not in ("RoleBinding", "ClusterRoleBinding"):
+            continue
+        code = (
+            "role-binding-ref-missing"
+            if kind == "RoleBinding"
+            else "cluster-role-binding-ref-missing"
+        )
+        role_ref = _get(obj, "roleRef", default={}) or {}
+        role_name = role_ref.get("name")
+        if role_name and roles and role_name not in roles:
+            issues.append(
+                Issue(
+                    level="warning",
+                    code=code,
+                    message=(
+                        f"{kind} grants role '{role_name}', which is not part of this "
+                        f"bundle. The binding grants nothing until that role exists."
+                    ),
+                    path=["roleRef", "name"],
+                    object_index=index,
+                )
+            )
+        for subject_index, subject in enumerate(_get(obj, "subjects", default=[]) or []):
+            if not isinstance(subject, dict):
+                continue
+            if subject.get("kind") != "ServiceAccount":
+                continue
+            subject_name = subject.get("name")
+            if subject_name and accounts and subject_name not in accounts:
+                issues.append(
+                    Issue(
+                        level="warning",
+                        code=code,
+                        message=(
+                            f"{kind} grants to ServiceAccount '{subject_name}', which "
+                            f"is not part of this bundle."
+                        ),
+                        path=["subjects", str(subject_index), "name"],
+                        object_index=index,
+                    )
+                )
     return issues
 
 

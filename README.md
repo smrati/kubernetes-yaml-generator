@@ -34,10 +34,11 @@ FastAPI
  ├── kind registry     scope · plural · ownership · categories
  ├── form engine       schema -> widget tree
  ├── presets           hand-written starting-point manifests
+ ├── tutorials         hand-written tutorials + the derived ones
  ├── semantic engine   coupling rules · reference checks · advisories
  ├── validator         form-time -> JSON Schema (strict) -> semantic
  ├── renderer          dict -> ordered YAML -> multi-document bundle
- └── CLI               serve · kinds · presets · preset · tree · generate · validate
+ └── CLI               serve · kinds · presets · preset · tutorial · tree · generate · validate
 ```
 
 Validation runs in four layers, because each catches a different class of error:
@@ -48,6 +49,27 @@ Validation runs in four layers, because each catches a different class of error:
 | JSON Schema (strict) | unknown fields, wrong types, missing required fields |
 | Semantic | selector/label mismatch, `targetPort` that matches no container port, dangling `ConfigMap` references |
 | Server dry-run | admission control, defaulting, real API-server rejection — *planned, needs a cluster* |
+
+## Tutorials
+
+Every kind opens with a tutorial, in two tiers. **Twenty-nine kinds have a
+hand-written one** — the workload, networking, configuration, storage, scaling and
+access-control kinds a course actually walks. The rest get a derived one: the
+schema's own description, the scope, who normally creates it, and how it connects
+to other kinds.
+
+The tutorial is not a page beside the form — it is wired into it:
+
+- **Related kinds** are links to their own forms.
+- **Field paths** in the prose are links that scroll the form to that field and
+  flash it. `spec.selector.matchLabels` in the tutorial *is* that input.
+- **How it connects** and **what the tool checks for you** are generated from the
+  same tables the checker uses, so the tutorial cannot describe a check that does
+  not exist.
+
+```bash
+uv run kyamlgen tutorial Deployment
+```
 
 ## Templates
 
@@ -82,16 +104,16 @@ uv run kyamlgen validate manifest.yaml
 ## Tests
 
 ```bash
-uv run pytest        # 112 Python tests, plus the 19 JavaScript tests they wrap
+uv run pytest        # 211 Python tests, plus the 19 JavaScript tests they wrap
 ```
 
 The suite covers the schema service, the widget engine (including a test that walks
 *every* kind in the bundle), all four validation layers, the YAML renderer, every
-template, and the HTTP API end to end.
+template, every tutorial's links, and the HTTP API end to end.
 
 ## Status
 
-See `architecture.md` §14 for the honest status table and §15 for the open
+See `architecture.md` §15 for the honest status table and §16 for the open
 questions. `INTENT.md` is the append-only decision log explaining *why* each choice
 was made.
 

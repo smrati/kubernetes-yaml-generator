@@ -30,6 +30,8 @@ from .schemas import (
     version_key,
 )
 from .semantics import analyse
+from .tutorials import curated_kinds as tutorial_kinds
+from .tutorials import tutorial_for
 from .validate import Issue, SchemaValidator, check_form
 from .widgets import WidgetBuilder
 
@@ -96,6 +98,7 @@ def _kinds(version: str) -> list[dict[str, Any]]:
             "namespaced": info.namespaced,
             "authorable": info.authorable,
             "curated": is_curated(info.kind),
+            "tutorial": info.kind in tutorial_kinds(),
             "note": info.note,
             "category": info.tags[0] if info.tags else "Other",
         }
@@ -154,6 +157,7 @@ def form(request: Request, apiVersion: str, kind: str, version: str | None = Non
             "kind": kind,
             "tree": _client_tree(tree),
             "preset": preset_for(kind),
+            "tutorial": tutorial_for(kind, api_version, version),
             "info": {
                 "plural": info["plural"],
                 "namespaced": info["namespaced"],
@@ -176,6 +180,22 @@ def api_kinds(version: str | None = None) -> Any:
 def api_presets() -> Any:
     """The kinds that have a hand-written starting-point manifest."""
     return {"kinds": list(curated_kinds())}
+
+
+@app.get("/api/tutorial")
+def api_tutorial(apiVersion: str, kind: str, version: str | None = None) -> Any:
+    """The tutorial for a kind — curated, or derived from the schema and rules."""
+    version = version or default_version()
+    tutorial = tutorial_for(kind, apiVersion, version)
+    if tutorial is None:
+        return JSONResponse({"error": f"unknown kind {kind}"}, status_code=404)
+    return {
+        "kind": tutorial.kind,
+        "summary": tutorial.summary,
+        "curated": tutorial.curated,
+        "lead": tutorial.lead_html,
+        "sections": [{"heading": heading, "body": body} for heading, body in tutorial.sections],
+    }
 
 
 @app.get("/api/tree")

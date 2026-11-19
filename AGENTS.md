@@ -33,7 +33,7 @@ content here.
 
 ## Current state
 
-M1 complete; M2 and M3 substantially done. `architecture.md` §14 has the honest
+M1 complete; M2 and M3 substantially done. `architecture.md` §15 has the honest
 status table. M4 (server dry-run against a real cluster) is the only milestone
 blocked on infrastructure.
 
@@ -46,6 +46,7 @@ blocked on infrastructure.
 - `uv run kyamlgen kinds` — every kind in the schema bundle.
 - `uv run kyamlgen presets` — the kinds that have a hand-written template.
 - `uv run kyamlgen preset Deployment` — print one template.
+- `uv run kyamlgen tutorial Deployment` — print the tutorial for a kind.
 - `uv run kyamlgen tree <Kind> --api-version <group/version>` — the widget tree as
   JSON.
 - `uv run kyamlgen generate <Kind> --api-version <group/version> --values file.json`
@@ -68,8 +69,9 @@ blocked on infrastructure.
 | `semantics.py` | Cross-object rules over a bundle |
 | `render.py` | Pruning, key ordering, YAML output |
 | `presets/` | Hand-written starting-point manifests, one YAML file per kind |
+| `tutorials/` | Hand-written tutorials, one Markdown file per kind, plus the derived ones |
 | `app.py` | FastAPI routes |
-| `cli.py` | `serve` / `kinds` / `presets` / `preset` / `tree` / `generate` / `validate` |
+| `cli.py` | `serve` / `kinds` / `presets` / `preset` / `tutorial` / `tree` / `generate` / `validate` |
 | `static/formstate.js` | The form's data-path logic — shared by the browser and the Node tests |
 
 ## Ground rules — do not relax these
@@ -111,10 +113,19 @@ blocked on infrastructure.
     bundle *contains* the relevant kind and none of it matches. Absence is not a
     finding: a warning that fires on correct input trains the user to ignore
     warnings.
+12. **A tutorial is prose; a rule is a fact.** The curated tutorials live in
+    `tutorials/curated/*.md` and carry judgement. The facts — which kinds relate,
+    which checks apply — live in the `RULES` and `RELATIONSHIPS` tables in
+    `semantics.py`, and the tutorial is generated from them. Do not restate a
+    rule's meaning in a tutorial: it will drift.
+13. **A tutorial's links are checked.** A field path that does not exist in the
+    kind's form is a failing test, not a dead link. When you write
+    `field:spec.ports[].port`, `spec.ports[].port` must be a real path in that
+    kind's widget tree.
 
 ## Tests
 
-`uv run pytest` runs everything: 112 Python tests, plus a wrapper that runs the 19
+`uv run pytest` runs everything: 211 Python tests, plus a wrapper that runs the 19
 JavaScript tests under `node --test`. One command covers the whole project.
 
 | File | Covers |
@@ -124,6 +135,7 @@ JavaScript tests under `node --test`. One command covers the whole project.
 | `test_validation.py` | Form-time checks, schema validation, every semantic rule |
 | `test_render.py` | Key ordering, YAML 1.1 quoting, pruning, multi-document output |
 | `test_presets.py` | **Every preset validates cleanly**; presets use only common fields; the Deployment and Service presets form a clean bundle |
+| `test_tutorials.py` | **Every tutorial's field paths and kind links resolve**; every kind in the bundle has a tutorial; the rule table covers every check |
 | `test_api.py` | End-to-end HTTP behaviour |
 | `test_javascript.py` | Runs `tests/js/formstate.test.js` under `node --test` |
 | `js/formstate.test.js` | The form's path arithmetic: `getIn`, `setIn`, `deleteIn`, `readContainer`, `ensureContainer` |
@@ -134,5 +146,5 @@ Three of these matter more than the rest:
   the schema bundle and fails if any of them breaks the form engine.
 - `test_presets.py::test_curated_presets_use_only_common_fields` enforces the rule
   that a preset may not set a field the form hides behind "advanced".
-- `js/formstate.test.js::reading a path never disturbs the data` pins the bug
-  described in rule 9 above.
+- `test_tutorials.py::test_field_paths_in_a_tutorial_exist_in_the_form` enforces
+  the same idea for a tutorial's links to the form.

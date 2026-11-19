@@ -9,14 +9,14 @@ A form-driven Kubernetes YAML generator with cross-object semantic validation.
   `INTENT.md` that records *why* it was taken.
 - **§4** is the system architecture. The rest of the document walks each layer in
   the order data flows through it.
-- **§13** is the module layout.
-- **§14** records what is built, what is not, and what comes next.
-- **§15** lists the open questions.
+- **§14** is the module layout.
+- **§15** records what is built, what is not, and what comes next.
+- **§16** lists the open questions.
 
 `INTENT.md` is the append-only decision log. `architecture.md` is the design of record.
 Neither duplicates the other: this document says *what*, `INTENT.md` says *why*.
 
-Status: **M1 complete** — see §14.
+Status: **M1 complete** — see §15.
 
 ---
 
@@ -48,7 +48,7 @@ semantic engine that understands how Kubernetes objects reference each other.
 
 **Out of scope**
 
-- Applying to a cluster (deferred to M4 — see §14).
+- Applying to a cluster (deferred to M4 — see §15).
 - Custom Resource Definitions authored through the form (the schema for a CRD is
   self-referential; the engine falls back to raw JSON for the recursive part, §6.3).
 - Hosting, accounts, persistence. The tool is local and stateless.
@@ -89,6 +89,8 @@ semantic engine that understands how Kubernetes objects reference each other.
 | D11 | The schema bundle's file naming is irregular, so the kind index is authoritative | 2026-11-19 |
 | D12 | Presets are hand-written *manifests*, not form definitions; seventeen kinds have one | 2026-11-19 |
 | D13 | A reference missing from the bundle is not a finding — the bundle is not the cluster | 2026-11-19 |
+| D14 | Tutorials are hand-written Markdown for twenty-nine kinds, with a derived card for the rest | 2026-11-19 |
+| D15 | The tutorial's connections and checks are derived from the checker's own tables | 2026-11-19 |
 
 ---
 
@@ -320,6 +322,9 @@ else is a warning.
 | `ingress-backend-missing` | An Ingress backend must reference a Service in the bundle | error |
 | `ingress-backend-port-missing` | …on a port that Service actually exposes | error |
 | `scaler-target-missing` | An HPA must target a workload in the bundle | warning |
+| `pdb-selector-unmatched` | A PodDisruptionBudget's selector must match the pods it protects | warning |
+| `role-binding-ref-missing` | A RoleBinding's role and service account must exist | warning |
+| `cluster-role-binding-ref-missing` | A ClusterRoleBinding's role and service account must exist | warning |
 | `dangling-reference` | A referenced ConfigMap, Secret or PVC is not in the bundle | warning |
 | `namespace-mismatch` | Objects in one bundle disagree about their namespace | warning |
 | `image-no-tag` | An image has no tag, so it resolves to `:latest` | warning |
@@ -433,11 +438,103 @@ to template** puts the preset back.
 
 Clearing an object also has to drop that object's cached map rows. Otherwise the
 rows reappear on the next render and put the values straight back — the same
-class of bug as the renderer-creates-data one (§13.1).
+class of bug as the renderer-creates-data one (§14.1).
 
 ---
 
-## 11. Renderer (`render.py`)
+## 11. Tutorials (`tutorials/`)
+
+A tutorial is what makes the tool a teacher rather than a form. It has two
+halves, and the split is the design.
+
+### 11.1 The curated half — the judgement (D14)
+
+Twenty-nine kinds have a hand-written tutorial: the seventeen that have a
+template, plus the RBAC and scheduling kinds a course needs (Role, RoleBinding,
+ClusterRole, ClusterRoleBinding, ReplicaSet, Endpoints, EndpointSlice,
+LimitRange, ReplicationController, PriorityClass, StorageClass,
+PersistentVolume).
+
+They live in `tutorials/curated/<kind>.md` as Markdown, with YAML front matter
+carrying the kind and a one-line summary:
+
+```markdown
+---
+kind: Deployment
+summary: Keeps N copies of your application running, and replaces them when you change the image.
+---
+
+A Deployment manages a ReplicaSet, which in turn manages Pods...
+
+## Use it for
+- A stateless service that should run several copies behind a [Service](...).
+
+## Use something else for
+- Workloads that need stable identities → [StatefulSet](...)
+```
+
+The curated half answers the questions only a person can answer: what the kind
+is *for*, when to reach for something else, and the mistake that bites people.
+
+### 11.2 The derived half — everything the tool already knows
+
+The rest is generated, from the schema, the rule table and the registry:
+
+| Section | Source |
+|---|---|
+| Summary | curated, or the schema's own description |
+| **How it connects** | the relationship table in `semantics.py` |
+| **What the tool checks for you** | the rule table — the rules' own summaries |
+| **Worked example** | the template, where there is one |
+| **Scope and ownership** | the registry — namespaced? who normally creates it? |
+
+The other kinds get a **derived tutorial**: the schema's description, the scope,
+the ownership advisory, the required fields, and the connections. A thin page,
+but never an empty one.
+
+### 11.3 Why the tutorial and the checker share their facts (D15)
+
+The relationships and the checks come from the same tables the semantic engine
+uses, so the tutorial cannot describe a check that does not exist or a connection
+that is not checked.
+
+That distinction is sharper than it first looks, and getting it wrong is what
+the first implementation did. **"Which kinds relate to each other" and "which
+checks apply to this kind" are different questions.** A rule table entry says
+`image-no-tag` concerns a Deployment — but a Deployment does not *connect* to a
+CronJob because of it. So there are two tables:
+
+- `RULES` — which kinds a check applies to, and what it checks. Drives "What the
+  tool checks for you".
+- `RELATIONSHIPS` — which kinds reference each other, directionally, and the
+  check that catches a mismatch. Drives "How it connects".
+
+The relationships are directional because the counterpart set depends on which
+side you are reading from: for a Deployment the counterpart of the ConfigMap
+relationship is `ConfigMap`; for a ConfigMap it is the kinds that can reference
+it. Peers are never counterparts — a Deployment does not connect to a
+StatefulSet.
+
+A test asserts that every relationship names a real rule, and that the rule
+covers both sides.
+
+### 11.4 The tutorial is wired into the form
+
+The panel sits above the form, expanded by default, with the derived sections
+collapsed. Two kinds of link make it one surface rather than a page beside a
+form:
+
+- **Related kinds** are ordinary links to their own forms.
+- **Field paths** are links that scroll the form to that field and flash it —
+  `spec.selector.matchLabels` in the prose, the actual input in the form.
+
+A path in a tutorial is written the way it would be spoken, with `[]` for array
+items: `spec.ports[].port`. A test walks the widget tree and the tutorial
+together, so a typo is a failing test rather than a dead link.
+
+---
+
+## 12. Renderer (`render.py`)
 
 ### 10.1 Key order (D6)
 
@@ -464,7 +561,7 @@ object, so a required field that was never touched is still reported.
 
 ---
 
-## 12. Web application (`app.py`)
+## 13. Web application (`app.py`)
 
 | Route | Purpose |
 |---|---|
@@ -493,7 +590,7 @@ right trade.
 
 ---
 
-## 13. Module layout
+## 14. Module layout
 
 ```
 src/kyamlgen/
@@ -506,8 +603,11 @@ src/kyamlgen/
   presets/       hand-written starting-point manifests (§10)
     __init__.py  loader
     curated/     one YAML manifest per kind
+  tutorials/     the teaching content (§11)
+    __init__.py  loader and assembly
+    curated/     one Markdown file per kind
   app.py         FastAPI routes
-  cli.py         serve / kinds / tree / generate / validate / presets / preset
+  cli.py         serve / kinds / presets / preset / tutorial / tree / generate / validate
   templates/     base.html, index.html, form.html
   static/
     style.css    the whole stylesheet
@@ -520,6 +620,7 @@ tests/
   test_validation.py form-time checks, schema validation, every semantic rule
   test_render.py     key ordering, YAML 1.1 quoting, pruning, multi-document output
   test_presets.py    every preset validates; presets use only common fields
+  test_tutorials.py  every tutorial's links resolve; every kind has a tutorial
   test_api.py        end-to-end HTTP behaviour
   test_javascript.py runs the Node tests below
   js/formstate.test.js  the form's path arithmetic, under `node --test`
@@ -540,7 +641,7 @@ from pytest, so `uv run pytest` still covers the whole project.
 
 ---
 
-## 14. Status and milestones
+## 15. Status and milestones
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -551,10 +652,11 @@ from pytest, so `uv run pytest` still covers the whole project.
 | M4 | Apply service (`kubectl --dry-run=server`, then apply) | **not started** — needs a local cluster (`kind`); Docker is already installed |
 | M5 | Ownership advisories, manifest library, Kustomize export | **partial** — advisories and presets done; library and Kustomize export not started |
 | — | Curated presets for seventeen kinds, with per-field and per-section clearing | **done** (§10) |
+| — | Curated tutorials for twenty-nine kinds, derived tutorials for the rest | **done** (§11) |
 
 ---
 
-## 15. Open questions
+## 16. Open questions
 
 1. **Shared-value propagation.** The bundle model lets a Deployment and a Service be
    generated together, but the labels and ports are still typed twice. Should

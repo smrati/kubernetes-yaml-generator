@@ -70,6 +70,17 @@ OWNED_BY_CONTROLLER: dict[str, str] = {
     "ResourceClaim": "the resource scheduler",
 }
 
+#: Where the creator of a kind is itself a kind.  This is the ownership relation
+#: in a form the tutorial can link to: "an Endpoints object is normally created by
+#: a Service", with both sides one click away.
+OWNED_BY_KIND: dict[str, tuple[str, ...]] = {
+    "Pod": ("Deployment", "StatefulSet", "DaemonSet", "Job", "ReplicaSet"),
+    "ReplicaSet": ("Deployment",),
+    "ControllerRevision": ("StatefulSet", "DaemonSet"),
+    "Endpoints": ("Service",),
+    "EndpointSlice": ("Service",),
+}
+
 #: Kinds that are never usefully authored by hand.
 NOT_AUTHORABLE = {
     "Node": "The kubelet registers and owns Nodes. A hand-written Node manifest is "

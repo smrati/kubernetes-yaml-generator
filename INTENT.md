@@ -68,7 +68,7 @@ delivered; and which kinds should be in the first working version.
    is more valuable than the exclusion: it is the moment the user learns that
    authoring a Pod by hand means taking over a controller's job.
 
-**Affects:** `architecture.md` §1, §6, §7, §11
+**Affects:** `architecture.md` §1, §6, §7, §12
 
 ---
 
@@ -208,7 +208,7 @@ does not, and the bug appears only in one of them.
 The cost is that the form requires JavaScript. For a local developer tool that is the
 right trade. The CLI covers the no-browser case with the same validation.
 
-**Affects:** `architecture.md` §12.1
+**Affects:** `architecture.md` §13.1
 
 ---
 
@@ -232,7 +232,7 @@ introduced exactly this bug, and it is covered by a test that round-trips `on`,
 The renderer also applies a key preference list, because the schemas list properties
 alphabetically and `image` before `name` inside a container reads wrong.
 
-**Affects:** `architecture.md` §11
+**Affects:** `architecture.md` §12
 
 ---
 
@@ -306,7 +306,7 @@ Deployment and the Service you just wrote.
 This also matches how manifests are actually applied: `kubectl apply -f` on a
 multi-document file is the normal case, and it is atomic per object, not per file.
 
-**Affects:** `architecture.md` §9, §12
+**Affects:** `architecture.md` §9, §13
 
 ---
 
@@ -443,3 +443,77 @@ referenced by a workload is exactly the kind of object the user is creating in t
 same session, and the warning disappears once they add it.
 
 **Affects:** `architecture.md` §9.1, §3 (D13)
+
+---
+
+## 2026-11-19 — Tutorials for every kind
+
+**Asked:** "This application will be used in teaching Kubernetes to people. Let's
+accompany each kind to have a tutorial."
+
+**Decided:** Every kind gets a tutorial, in two tiers. Twenty-nine kinds have a
+hand-written one, in Markdown at `tutorials/curated/<kind>.md`; the rest get a
+**derived** one assembled from the schema, the rule table and the kind registry.
+
+The tutorial panel sits above the form, expanded by default, with the derived
+sections collapsed. Related kinds are links to their forms, and field paths in the
+prose are links that scroll the form to that field and flash it.
+
+**Why:**
+
+1. *The form already shows every field with the API's own description.* So the
+   tutorial's unique value is the judgement: what the kind is **for**, when to
+   reach for something else instead, and how it couples to other kinds. Writing a
+   tutorial that repeated the field descriptions would have been work and no
+   teaching.
+
+2. *Markdown, and the tutorial is prose.* A tutorial is prose, and prose belongs in
+   a prose file. YAML block scalars are a workaround, and a teacher editing
+   `deployment.md` in a text editor is a workflow that will actually happen. The
+   cost is one small pure-Python dependency.
+
+3. *Twenty-nine, not all 213.* "Each kind" is honoured by the derived tier — no
+   kind opens with nothing — but a *hand-written* tutorial for every kind would
+   be uneven across a course. The set chosen is the one a Kubernetes course
+   actually walks: the workload, networking, configuration, storage, scaling and
+   access-control kinds. RBAC was the gap worth closing; without Role and
+   RoleBinding a course has a hole in it.
+
+4. *A derived tier beats nothing.* For the other 184 kinds the tutorial is the
+   schema's own description, the scope, the ownership advisory, the required
+   fields and the connections. It is thin, and it is honest — it says what the
+   API server demands and who normally creates the object, which is the first two
+   things you want to know.
+
+**Affects:** `architecture.md` §11, §3 (D14)
+
+---
+
+## 2026-11-19 — The tutorial and the checker share their tables
+
+**Asked:** (implicit, found while building the tutorial) The first implementation
+derived the "how it connects" section from the rule table, and produced
+nonsense: a Deployment appeared to "connect" to CronJob, DaemonSet, Job, Pod,
+ReplicaSet and StatefulSet, because those are the kinds the `image-no-tag` rule
+applies to.
+
+**Decided:** Two tables instead of one. `RULES` says which kinds a *check* applies
+to and what it checks. `RELATIONSHIPS` says which kinds *reference each other*,
+directionally, and which check catches a mismatch.
+
+**Why:** "Which kinds relate to each other" and "which checks apply to this kind"
+are different questions, and the first implementation conflated them. A Deployment
+does not connect to a CronJob because both of them can have an untagged image.
+
+The relationships have to be *directional* for the same reason. For a Deployment,
+the counterpart of the ConfigMap relationship is `ConfigMap`. For a ConfigMap, it
+is the kinds that can reference it. One symmetric set cannot produce both, and
+peers must never be listed as counterparts — a Deployment does not connect to a
+StatefulSet.
+
+The relationship table is also where the last two gaps in the checker came from.
+Writing "a RoleBinding grants a role to a subject, so both have to exist" and
+"a PodDisruptionBudget selects the pods it protects" made it obvious that the tool
+checked neither. Both are now rules.
+
+**Affects:** `architecture.md` §9, §11.3, §3 (D15)

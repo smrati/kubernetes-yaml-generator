@@ -59,6 +59,13 @@
           dot.textContent = "•";
           title.appendChild(dot);
         }
+        if (kind.tutorial) {
+          const mark = document.createElement("span");
+          mark.className = "tutorial-mark";
+          mark.title = "Has a hand-written tutorial";
+          mark.textContent = "▤";
+          title.appendChild(mark);
+        }
 
         const api = document.createElement("span");
         api.className = "kind-api";

@@ -86,6 +86,65 @@
     );
   }
 
+  // -- field links ---------------------------------------------------------
+
+  // A field's DOM id, built from where it sits in the manifest.  The tutorial
+  // links to fields by the same path, so clicking one can find the field.
+  function fieldId(parts) {
+    return (
+      "field-" +
+      parts
+        .map(function (part) {
+          return String(part).replace(/[^A-Za-z0-9]/g, "");
+        })
+        .join("-")
+    );
+  }
+
+  // Turn a tutorial's path into a pattern that matches a field's id.  "[]" means
+  // "any item in this array", so spec.ports[].port matches field-spec-ports-0-port.
+  function fieldPattern(path) {
+    const segments = path.split(".").map(function (segment) {
+      if (segment.endsWith("[]")) {
+        return segment.slice(0, -2).replace(/[^A-Za-z0-9]/g, "") + "-\\d+";
+      }
+      return segment.replace(/[^A-Za-z0-9]/g, "");
+    });
+    return new RegExp("^field-" + segments.join("-") + "$");
+  }
+
+  function focusField(path) {
+    const pattern = fieldPattern(path);
+    const fields = document.querySelectorAll("[id^='field-']");
+    for (let i = 0; i < fields.length; i++) {
+      if (pattern.test(fields[i].id)) {
+        const target = fields[i];
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.remove("field-flash");
+        // Force a reflow so the animation restarts on a second click.
+        void target.offsetWidth;
+        target.classList.add("field-flash");
+        const input = target.querySelector("input, textarea, select");
+        if (input) input.focus({ preventScroll: true });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function wireTutorialLinks() {
+    const panel = document.getElementById("tutorial");
+    if (!panel) return;
+    panel.addEventListener("click", function (event) {
+      const link = event.target.closest("a");
+      if (!link) return;
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("field:")) return;
+      event.preventDefault();
+      focusField(href.slice("field:".length));
+    });
+  }
+
   // -- rendering ----------------------------------------------------------
 
   function renderNode(node, parts, depth) {
@@ -104,6 +163,7 @@
   function renderObject(node, parts, depth) {
     const obj = activeObject();
     const details = el("details", "fieldset");
+    details.id = fieldId(parts);
     if (depth <= 1) details.open = true;
 
     const summary = el("summary");
@@ -148,6 +208,7 @@
   function renderArray(node, parts, depth) {
     const obj = activeObject();
     const details = el("details", "fieldset");
+    details.id = fieldId(parts);
     if (depth <= 1) details.open = true;
 
     const summary = el("summary");
@@ -227,6 +288,7 @@
   function renderMap(node, parts, depth) {
     const obj = activeObject();
     const details = el("details", "fieldset");
+    details.id = fieldId(parts);
     if (depth <= 1) details.open = true;
 
     const summary = el("summary");
@@ -293,6 +355,7 @@
   function renderScalar(node, parts) {
     const obj = activeObject();
     const wrap = el("div", "field");
+    wrap.id = fieldId(parts);
 
     const label = el("label");
     label.appendChild(document.createTextNode(node.label || node.name));
@@ -657,4 +720,5 @@
     });
 
   addObject(CFG.apiVersion, CFG.kind, CFG.tree, CFG.preset);
+  wireTutorialLinks();
 })();

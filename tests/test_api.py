@@ -70,6 +70,32 @@ def test_presets_endpoint_lists_the_curated_kinds(client: TestClient) -> None:
     assert "Service" in kinds
 
 
+def test_tutorial_endpoint_returns_the_curated_tutorial(client: TestClient) -> None:
+    response = client.get("/api/tutorial?apiVersion=apps/v1&kind=Deployment")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "Deployment"
+    assert payload["curated"] is True
+    assert payload["summary"]
+    assert "ReplicaSet" in payload["lead"]
+    headings = [section["heading"] for section in payload["sections"]]
+    assert "How it connects" in headings
+    assert "What the tool checks for you" in headings
+
+
+def test_tutorial_endpoint_falls_back_to_a_derived_one(client: TestClient) -> None:
+    response = client.get("/api/tutorial?apiVersion=v1&kind=ComponentStatus")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["curated"] is False
+    assert payload["summary"]
+
+
+def test_tutorial_endpoint_404s_for_an_unknown_kind(client: TestClient) -> None:
+    response = client.get("/api/tutorial?apiVersion=v1&kind=NotAKind")
+    assert response.status_code == 404
+
+
 def test_form_page_embeds_the_preset(client: TestClient) -> None:
     response = client.get("/form?apiVersion=apps/v1&kind=Deployment")
     assert response.status_code == 200
