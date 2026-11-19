@@ -30,6 +30,12 @@ LABEL_VALUE = re.compile(r"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
 QUANTITY = re.compile(r"^\d+(\.\d+)?([EPTGMK]i?|[mk])?$")
 IMAGE_WITH_TAG = re.compile(r"^[^:@/]+(:[^:@/]+)?(@sha256:[0-9a-f]{64})$")
 
+#: An IntOrString accepts a number, a percentage, or a name.  ``targetPort: http``
+#: and ``maxSurge: 25%`` are both valid, so a check that demanded digits would
+#: reject the very values the field exists to allow.
+INT_OR_PERCENTAGE = re.compile(r"^\d+%?$")
+DNS_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+
 #: Kubernetes object names are DNS-1123 subdomains of at most 253 characters.
 MAX_NAME_LENGTH = 253
 MAX_NAMESPACE_LENGTH = 63
@@ -172,12 +178,12 @@ def _check_value(widget: dict[str, Any], value: Any, path: list[str]) -> list[Is
 
     elif kind == "int-or-string":
         text = str(value).strip()
-        if text and not text.isdigit():
+        if text and not (INT_OR_PERCENTAGE.match(text) or DNS_LABEL.match(text)):
             issues.append(
                 Issue(
                     "error",
                     "int-or-string",
-                    f"{widget['label']} must be a port number or a port name.",
+                    f"{widget['label']} must be a port number, a percentage, or a name.",
                     path,
                 )
             )
@@ -245,7 +251,10 @@ def _check_value(widget: dict[str, Any], value: Any, path: list[str]) -> list[Is
             elif (
                 style == "generic"
                 and value_kind == "int-or-string"
-                and not str(map_value).strip().isdigit()
+                and not (
+                    INT_OR_PERCENTAGE.match(str(map_value).strip())
+                    or DNS_LABEL.match(str(map_value).strip())
+                )
             ):
                 issues.append(
                     Issue(

@@ -154,7 +154,12 @@ def _check_selector_matches_template(workloads: list[dict[str, Any]]) -> list[Is
 def _check_service_selectors(
     services: list[dict[str, Any]], workloads: list[dict[str, Any]]
 ) -> list[Issue]:
-    """A Service selector must match the pods it is meant to route to."""
+    """A Service selector must match the pods it is meant to route to.
+
+    A Service whose selector matches nothing in the bundle is only a problem when
+    the bundle *contains* workloads — if it contains none, the pods it selects may
+    already exist in the cluster, and the bundle is not the cluster.
+    """
     issues: list[Issue] = []
     for index, service in enumerate(services):
         if service.get("spec", {}).get("type") == "ExternalName":
@@ -175,19 +180,6 @@ def _check_service_selectors(
             )
             continue
         if not workloads:
-            issues.append(
-                Issue(
-                    level="warning",
-                    code="service-selector-unverifiable",
-                    message=(
-                        f"Service {_name(service)} selects "
-                        f"{_format_selector(selector)} but no workload is part of this "
-                        f"bundle, so the match cannot be checked here."
-                    ),
-                    path=["spec", "selector"],
-                    object_index=index,
-                )
-            )
             continue
         if _matching_workload(selector, workloads) is None:
             issues.append(
@@ -352,18 +344,8 @@ def _check_ingress_backends(
                 if not name:
                     continue
                 if not service_map:
-                    issues.append(
-                        Issue(
-                            level="warning",
-                            code="ingress-backend-unverifiable",
-                            message=(
-                                f"Ingress backend '{name}' cannot be checked: no "
-                                f"Service is part of this bundle."
-                            ),
-                            path=["spec", "rules", str(rule_index)],
-                            object_index=index,
-                        )
-                    )
+                    # The bundle contains no Service, so the backend may well exist
+                    # in the cluster.  The bundle is not the cluster.
                     continue
                 service = service_map.get(name)
                 if service is None:
@@ -419,8 +401,16 @@ def _check_ingress_backends(
 
 
 def _check_scalers(objects: list[dict[str, Any]], workloads: list[dict[str, Any]]) -> list[Issue]:
-    """A HorizontalPodAutoscaler must target a workload that exists."""
+    """A HorizontalPodAutoscaler must target a workload that exists.
+
+    As with the other cross-object rules, a scaler whose target is simply absent
+    from the bundle is not a finding: the workload may already be running in the
+    cluster.  It becomes a finding when the bundle *does* contain workloads and
+    none of them is the one being scaled.
+    """
     issues: list[Issue] = []
+    if not workloads:
+        return issues
     targets = {(obj.get("kind"), _name(obj)) for obj in workloads}
     for index, obj in enumerate(objects):
         if obj.get("kind") != "HorizontalPodAutoscaler":

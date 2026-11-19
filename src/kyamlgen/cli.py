@@ -15,8 +15,9 @@ from typing import Any
 import yaml
 
 from . import __version__
+from .presets import curated_kinds, preset_for
 from .registry import describe
-from .render import parse_yaml, to_bundle_yaml
+from .render import parse_yaml, to_bundle_yaml, to_yaml
 from .schemas import (
     SchemaError,
     default_version,
@@ -66,21 +67,43 @@ def cmd_tree(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_presets(args: argparse.Namespace) -> int:
+    """List the kinds that have a hand-written starting-point manifest."""
+    for kind in curated_kinds():
+        print(kind)
+    return 0
+
+
+def cmd_preset(args: argparse.Namespace) -> int:
+    """Print one preset."""
+    manifest = preset_for(args.kind)
+    if manifest is None:
+        print(f"error: no preset for kind '{args.kind}'", file=sys.stderr)
+        return 2
+    sys.stdout.write(to_yaml(manifest))
+    return 0
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """Build a manifest from a JSON file of field values."""
     version = args.version or default_version()
     bundle = load_bundle(version, strict=True)
-    if args.values == "-":
-        values = json.load(sys.stdin)
-    else:
-        values = json.loads(Path(args.values).read_text())
 
-    manifest: dict[str, Any] = {
-        "apiVersion": args.api_version,
-        "kind": args.kind,
-        "metadata": {},
-    }
-    manifest.update(values)
+    if args.preset:
+        manifest = preset_for(args.kind)
+        if manifest is None:
+            print(f"error: no preset for kind '{args.kind}'", file=sys.stderr)
+            return 2
+        manifest = dict(manifest)
+    else:
+        values = (
+            json.load(sys.stdin)
+            if args.values == "-"
+            else json.loads(Path(args.values).read_text())
+        )
+        manifest = {"apiVersion": args.api_version, "kind": args.kind, "metadata": {}}
+        manifest.update(values)
+
     manifest.setdefault("apiVersion", args.api_version)
     manifest.setdefault("kind", args.kind)
 
@@ -165,10 +188,24 @@ def build_parser() -> argparse.ArgumentParser:
     generate = sub.add_parser("generate", help="Build a manifest from JSON values.")
     generate.add_argument("kind")
     generate.add_argument("--api-version", required=True)
-    generate.add_argument("--values", default="-", help="JSON file, or '-' for stdin.")
+    generate.add_argument(
+        "--values", default="-", help="JSON file, or '-' for stdin. Ignored with --preset."
+    )
+    generate.add_argument(
+        "--preset",
+        action="store_true",
+        help="Start from the kind's hand-written template instead of a values file.",
+    )
     generate.add_argument("--out", default=None, help="Write YAML here instead of stdout.")
     generate.add_argument("--k8s-version", dest="version", default=None)
     generate.set_defaults(func=cmd_generate)
+
+    presets = sub.add_parser("presets", help="List the kinds that have a template.")
+    presets.set_defaults(func=cmd_presets)
+
+    preset = sub.add_parser("preset", help="Print one kind's template.")
+    preset.add_argument("kind")
+    preset.set_defaults(func=cmd_preset)
 
     validate = sub.add_parser("validate", help="Validate a YAML manifest.")
     validate.add_argument("path", nargs="?", default="-")

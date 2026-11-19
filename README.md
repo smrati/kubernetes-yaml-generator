@@ -33,10 +33,11 @@ FastAPI
  ├── schema service    bundled Kubernetes JSON schemas, $ref-resolved
  ├── kind registry     scope · plural · ownership · categories
  ├── form engine       schema -> widget tree
+ ├── presets           hand-written starting-point manifests
  ├── semantic engine   coupling rules · reference checks · advisories
  ├── validator         form-time -> JSON Schema (strict) -> semantic
  ├── renderer          dict -> ordered YAML -> multi-document bundle
- └── CLI               serve · kinds · tree · generate · validate
+ └── CLI               serve · kinds · presets · preset · tree · generate · validate
 ```
 
 Validation runs in four layers, because each catches a different class of error:
@@ -47,6 +48,27 @@ Validation runs in four layers, because each catches a different class of error:
 | JSON Schema (strict) | unknown fields, wrong types, missing required fields |
 | Semantic | selector/label mismatch, `targetPort` that matches no container port, dangling `ConfigMap` references |
 | Server dry-run | admission control, defaulting, real API-server rejection — *planned, needs a cluster* |
+
+## Templates
+
+Seventeen common kinds open **pre-filled** with a hand-written template — a real,
+working manifest, not a field-by-field walkthrough. Each one is filled only to the
+level people actually use.
+
+The Deployment and Service templates are designed to work together: same labels,
+and the Service targets the *named* container port. Add both and the bundle
+validates with zero findings.
+
+Clearing is available at every granularity — a **×** on one field, **Clear** on a
+whole section, **×** on a map row, **Remove** on an array item, plus **Clear
+values** and **Reset to template** for the whole object. A **•** marks a field that
+still holds the template's value.
+
+```bash
+uv run kyamlgen presets                        # kinds that have a template
+uv run kyamlgen preset Deployment              # print one
+uv run kyamlgen generate Deployment --api-version apps/v1 --preset
+```
 
 ## From the command line
 
@@ -60,16 +82,16 @@ uv run kyamlgen validate manifest.yaml
 ## Tests
 
 ```bash
-uv run pytest        # 64 Python tests, plus the 12 JavaScript tests they wrap
+uv run pytest        # 112 Python tests, plus the 19 JavaScript tests they wrap
 ```
 
 The suite covers the schema service, the widget engine (including a test that walks
-*every* kind in the bundle), all four validation layers, the YAML renderer, and the
-HTTP API end to end.
+*every* kind in the bundle), all four validation layers, the YAML renderer, every
+template, and the HTTP API end to end.
 
 ## Status
 
-See `architecture.md` §13 for the honest status table and §14 for the open
+See `architecture.md` §14 for the honest status table and §15 for the open
 questions. `INTENT.md` is the append-only decision log explaining *why* each choice
 was made.
 

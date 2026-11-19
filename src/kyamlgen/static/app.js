@@ -49,6 +49,35 @@
     return FormState.ensureContainer(obj.data, parts, wantArray);
   }
 
+  function deleteIn(obj, parts) {
+    return FormState.deleteIn(obj.data, parts);
+  }
+
+  function deepCopy(value) {
+    return FormState.deepCopy(value);
+  }
+
+  function deepEqual(a, b) {
+    return FormState.deepEqual(a, b);
+  }
+
+  // A field still holds the preset's value, so it is still a suggestion rather
+  // than something the user typed.  Comparing values rather than tracking edits
+  // means this needs no state of its own and survives reordering an array.
+  function isPresetValue(obj, parts) {
+    if (!obj.preset) return false;
+    const current = getIn(obj.data, parts);
+    if (current === undefined || current === null || current === "") return false;
+    return deepEqual(current, getIn(obj.preset, parts));
+  }
+
+  function presetDot(obj, parts) {
+    if (!isPresetValue(obj, parts)) return null;
+    const dot = el("span", "preset-dot", "•");
+    dot.title = "Still the template's value — click the × to clear it";
+    return dot;
+  }
+
   function activeObject() {
     return (
       state.objects.find(function (o) {
@@ -73,12 +102,15 @@
   }
 
   function renderObject(node, parts, depth) {
+    const obj = activeObject();
     const details = el("details", "fieldset");
     if (depth <= 1) details.open = true;
 
     const summary = el("summary");
     summary.appendChild(document.createTextNode(node.label || node.name));
     if (node.required) summary.appendChild(el("span", "req", "required"));
+    summary.appendChild(el("span", "spacer"));
+    summary.appendChild(clearSectionButton(obj, parts, "Clear"));
     details.appendChild(summary);
 
     const body = el("div", "fieldset-body");
@@ -200,6 +232,8 @@
     const summary = el("summary");
     summary.appendChild(document.createTextNode(node.label || node.name));
     if (node.required) summary.appendChild(el("span", "req", "required"));
+    const dot = presetDot(obj, parts);
+    if (dot) summary.appendChild(dot);
     details.appendChild(summary);
 
     const body = el("div", "fieldset-body");
@@ -263,10 +297,13 @@
     const label = el("label");
     label.appendChild(document.createTextNode(node.label || node.name));
     if (node.required) label.appendChild(el("span", "req", "*"));
+    const dot = presetDot(obj, parts);
+    if (dot) label.appendChild(dot);
     wrap.appendChild(label);
 
     const current = getIn(obj.data, parts);
     let input;
+    let holder = null; // where the input lives, when it needs a wrapper of its own
 
     if (node.kind === "boolean") {
       const row = el("div", "checkbox-row");
@@ -275,7 +312,7 @@
       input.checked = current === true;
       row.appendChild(input);
       row.appendChild(el("span", "muted", current === true ? "enabled" : "disabled"));
-      wrap.appendChild(row);
+      holder = row;
       input.addEventListener("change", function () {
         setIn(activeObject().data, parts, input.checked);
         scheduleGenerate();
@@ -291,7 +328,6 @@
         input.appendChild(node2);
       });
       input.value = current === undefined ? "" : String(current);
-      wrap.appendChild(input);
       input.addEventListener("change", function () {
         setIn(activeObject().data, parts, input.value);
         scheduleGenerate();
@@ -300,7 +336,6 @@
       input = el("textarea", "textarea");
       input.value = current === undefined ? "" : String(current);
       if (node.placeholder) input.placeholder = node.placeholder;
-      wrap.appendChild(input);
       input.addEventListener("input", function () {
         setIn(activeObject().data, parts, input.value);
         scheduleGenerate();
@@ -315,7 +350,6 @@
         input.type = "text";
       }
       input.value = current === undefined ? "" : String(current);
-      wrap.appendChild(input);
       input.addEventListener("input", function () {
         let value = input.value;
         if (node.kind === "integer" || node.kind === "number") {
@@ -326,12 +360,50 @@
       });
     }
 
+    if (current !== undefined && current !== null && current !== "") {
+      const row = el("div", "field-row");
+      row.appendChild(holder || input);
+      row.appendChild(clearFieldButton(obj, parts, input));
+      wrap.appendChild(row);
+    } else {
+      wrap.appendChild(holder || input);
+    }
+
     if (node.description) {
       const hint = el("div", "hint");
       hint.textContent = truncate(node.description);
       wrap.appendChild(hint);
     }
     return wrap;
+  }
+
+  // A one-click clear for a single value.
+  function clearFieldButton(obj, parts, input) {
+    const button = el("button", "clear-btn", "×");
+    button.type = "button";
+    button.title = "Clear this value";
+    button.addEventListener("click", function () {
+      deleteIn(activeObject(), parts);
+      if (input.type === "checkbox") input.checked = false;
+      else input.value = "";
+      refresh();
+    });
+    return button;
+  }
+
+  // A one-click clear for a whole section.
+  function clearSectionButton(obj, parts, label) {
+    const button = el("button", "clear-section", label);
+    button.type = "button";
+    button.title = "Clear everything in this section";
+    button.addEventListener("click", function (event) {
+      // Clicking inside a <summary> toggles the section; this must not.
+      event.preventDefault();
+      event.stopPropagation();
+      deleteIn(activeObject(), parts);
+      refresh();
+    });
+    return button;
   }
 
   function truncate(text) {
@@ -382,6 +454,7 @@
   function refresh() {
     renderObjects();
     renderForm();
+    renderToolbar();
     scheduleGenerate();
   }
 
@@ -454,17 +527,51 @@
 
   // -- boot ---------------------------------------------------------------
 
-  function addObject(apiVersion, kind, tree) {
+  function addObject(apiVersion, kind, tree, preset) {
     const obj = {
       id: state.nextId++,
       apiVersion: apiVersion,
       kind: kind,
       tree: tree,
+      preset: preset || null,
       data: { apiVersion: apiVersion, kind: kind },
     };
+    if (obj.preset) {
+      obj.data = deepCopy(obj.preset);
+    }
     state.objects.push(obj);
     state.activeId = obj.id;
     refresh();
+  }
+
+  // Wipe one object back to nothing.  The cached map rows have to go too, or the
+  // rows reappear on the next render and put the values straight back.
+  function clearObject(obj) {
+    obj.data = { apiVersion: obj.apiVersion, kind: obj.kind };
+    forgetMapRows(obj);
+    refresh();
+  }
+
+  function resetObject(obj) {
+    if (!obj.preset) return;
+    obj.data = deepCopy(obj.preset);
+    forgetMapRows(obj);
+    refresh();
+  }
+
+  function forgetMapRows(obj) {
+    const prefix = obj.id + "|";
+    Object.keys(state.mapRows).forEach(function (key) {
+      if (key.indexOf(prefix) === 0) delete state.mapRows[key];
+    });
+  }
+
+  function renderToolbar() {
+    const obj = activeObject();
+    const reset = document.getElementById("reset-template");
+    const clear = document.getElementById("clear-values");
+    if (reset) reset.hidden = !(obj && obj.preset);
+    if (clear) clear.hidden = !obj;
   }
 
   function populateKindPicker() {
@@ -502,9 +609,19 @@
       .then(function (response) {
         return response.json();
       })
-      .then(function (tree) {
-        addObject(parts[0], parts[1], tree);
+      .then(function (result) {
+        addObject(parts[0], parts[1], result.tree, result.preset);
       });
+  });
+
+  document.getElementById("reset-template").addEventListener("click", function () {
+    const obj = activeObject();
+    if (obj) resetObject(obj);
+  });
+
+  document.getElementById("clear-values").addEventListener("click", function () {
+    const obj = activeObject();
+    if (obj) clearObject(obj);
   });
 
   document.getElementById("copy").addEventListener("click", function () {
@@ -539,5 +656,5 @@
       populateKindPicker();
     });
 
-  addObject(CFG.apiVersion, CFG.kind, CFG.tree);
+  addObject(CFG.apiVersion, CFG.kind, CFG.tree, CFG.preset);
 })();

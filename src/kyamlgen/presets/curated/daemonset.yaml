@@ -1,0 +1,40 @@
+# A DaemonSet runs one pod on every node — for agents that must run everywhere,
+# like a log shipper or a network plugin.
+#
+# There is no `replicas`: the count is the number of nodes.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: my-agent
+  labels:
+    app: my-agent
+spec:
+  selector:
+    matchLabels:
+      app: my-agent
+  template:
+    metadata:
+      labels:
+        app: my-agent
+    spec:
+      containers:
+        - name: my-agent
+          image: nginx:1.27
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http

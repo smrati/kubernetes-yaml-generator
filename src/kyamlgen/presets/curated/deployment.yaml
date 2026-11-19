@@ -1,0 +1,43 @@
+# A Deployment is the normal way to run an application in Kubernetes.
+#
+# Notice that the label `app: my-app` appears three times: in the selector, in
+# the pod template's labels, and — if you add a Service — in the Service's
+# selector.  All three must agree, and that is the single most common reason a
+# Deployment deploys perfectly and then serves nothing.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: my-app
+          image: nginx:1.27
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http

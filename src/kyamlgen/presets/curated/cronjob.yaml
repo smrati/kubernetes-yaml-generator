@@ -1,0 +1,22 @@
+# A CronJob creates Jobs on a schedule.
+#
+# The schedule is five fields: minute hour day-of-month month day-of-week.
+# "0 3 * * *" is 03:00 every day.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: my-task
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: task
+              image: busybox:1.36
+              command:
+                - sh
+                - -c
+                - echo hello

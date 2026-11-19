@@ -1,0 +1,13 @@
+# A PodDisruptionBudget caps how many pods a voluntary disruption — a node
+# drain, for example — may take down at once.
+#
+# `minAvailable: 1` means "at least one of these pods must stay up".
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-app
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: my-app

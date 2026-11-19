@@ -1,0 +1,8 @@
+# A namespace is a virtual cluster inside the cluster.
+#
+# Objects in it are addressed as <name>.<namespace>, and names only have to be
+# unique within their namespace rather than within the whole cluster.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-app

@@ -120,3 +120,48 @@ test("writing into a nested array item keeps the siblings", () => {
     name: "http",
   });
 });
+
+test("deleteIn removes a single value", () => {
+  const data = { metadata: { name: "api", namespace: "prod" } };
+  FormState.deleteIn(data, ["metadata", "name"]);
+  assert.deepStrictEqual(data, { metadata: { namespace: "prod" } });
+});
+
+test("deleteIn removes a whole subtree", () => {
+  const data = { spec: { template: { spec: { containers: [{ name: "web" }] } } } };
+  FormState.deleteIn(data, ["spec", "template"]);
+  assert.deepStrictEqual(data, { spec: {} });
+});
+
+test("deleteIn on a missing path changes nothing", () => {
+  const data = { metadata: { name: "api" } };
+  FormState.deleteIn(data, ["spec", "template", "spec"]);
+  assert.deepStrictEqual(data, { metadata: { name: "api" } });
+});
+
+test("deleteIn on an array index splices rather than leaving a hole", () => {
+  const data = { containers: [{ name: "a" }, { name: "b" }] };
+  FormState.deleteIn(data, ["containers", 0]);
+  assert.deepStrictEqual(data, { containers: [{ name: "b" }] });
+});
+
+test("deleteIn removes a field inside an array item", () => {
+  const data = { containers: [{ name: "a", image: "nginx" }] };
+  FormState.deleteIn(data, ["containers", 0, "image"]);
+  assert.deepStrictEqual(data, { containers: [{ name: "a" }] });
+});
+
+test("deepCopy leaves the original alone", () => {
+  const original = { metadata: { labels: { app: "api" } } };
+  const copy = FormState.deepCopy(original);
+  copy.metadata.labels.app = "changed";
+  assert.strictEqual(original.metadata.labels.app, "api");
+});
+
+test("deepEqual compares by value", () => {
+  assert.strictEqual(FormState.deepEqual({ a: [1, 2] }, { a: [1, 2] }), true);
+  assert.strictEqual(FormState.deepEqual({ a: [1, 2] }, { a: [1, 3] }), false);
+  assert.strictEqual(FormState.deepEqual(undefined, undefined), true);
+  assert.strictEqual(FormState.deepEqual("on", "on"), true);
+  assert.strictEqual(FormState.deepEqual(null, undefined), false);
+});

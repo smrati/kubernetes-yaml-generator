@@ -1,0 +1,10 @@
+# Non-secret configuration.  Every value here is a plain string.
+#
+# Mount it as a volume, or pull single values in with `envFrom`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-app-config
+data:
+  APP_ENV: production
+  LOG_LEVEL: info

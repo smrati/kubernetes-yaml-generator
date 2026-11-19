@@ -42,9 +42,41 @@ def test_form_page_embeds_the_widget_tree(client: TestClient) -> None:
 def test_tree_endpoint(client: TestClient) -> None:
     response = client.get("/api/tree?apiVersion=apps/v1&kind=Deployment")
     assert response.status_code == 200
-    tree = response.json()
-    assert tree["kind"] == "object"
-    assert [child["name"] for child in tree["children"]] == ["metadata", "spec"]
+    payload = response.json()
+    assert payload["tree"]["kind"] == "object"
+    assert [child["name"] for child in payload["tree"]["children"]] == ["metadata", "spec"]
+
+
+def test_tree_endpoint_carries_the_preset(client: TestClient) -> None:
+    response = client.get("/api/tree?apiVersion=apps/v1&kind=Deployment")
+    preset = response.json()["preset"]
+    assert preset["kind"] == "Deployment"
+    assert preset["metadata"]["name"] == "my-app"
+
+
+def test_tree_endpoint_has_no_preset_for_an_uncategorised_kind(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/tree?apiVersion=v1&kind=Endpoints")
+    assert response.json()["preset"] is None
+
+
+def test_presets_endpoint_lists_the_curated_kinds(client: TestClient) -> None:
+    response = client.get("/api/presets")
+    assert response.status_code == 200
+    kinds = response.json()["kinds"]
+    assert len(kinds) == 17
+    assert "Deployment" in kinds
+    assert "Service" in kinds
+
+
+def test_form_page_embeds_the_preset(client: TestClient) -> None:
+    response = client.get("/form?apiVersion=apps/v1&kind=Deployment")
+    assert response.status_code == 200
+    assert "preset:" in response.text
+    assert "my-app" in response.text
+    assert "Reset to template" in response.text
+    assert "Clear values" in response.text
 
 
 def test_render_produces_yaml_and_reports_issues(client: TestClient) -> None:

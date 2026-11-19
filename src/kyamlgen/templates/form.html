@@ -16,13 +16,32 @@
           {% if not info.authorable %}
             <span class="badge badge-warn">not usually authored</span>
           {% endif %}
+          {% if preset %}
+            <span class="badge badge-muted">has a template</span>
+          {% endif %}
         </div>
       </div>
+      <div class="spacer"></div>
+      <button id="reset-template" class="btn btn-ghost" title="Restore the template's values">
+        Reset to template
+      </button>
+      <button id="clear-values" class="btn btn-ghost" title="Empty this object">
+        Clear values
+      </button>
       <a class="btn btn-ghost" href="/">&larr; All kinds</a>
     </div>
 
     {% if info.note %}
       <p class="advisory">{{ info.note }}</p>
+    {% endif %}
+
+    {% if preset %}
+      <p class="preset-hint">
+        Pre-filled from the <strong>{{ kind }}</strong> template &mdash; a working
+        starting point, not an exhaustive reference.
+        <span class="muted">A <span class="preset-dot">•</span> marks a field that still
+        holds the template's value.</span>
+      </p>
     {% endif %}
 
     <div id="objects" class="objects"></div>
@@ -49,6 +68,7 @@
 <script>
   window.KYAMLGEN = {
     tree: {{ tree | tojson }},
+    preset: {{ preset | tojson }},
     apiVersion: {{ api_version | tojson }},
     kind: {{ kind | tojson }},
     version: {{ version | tojson }}

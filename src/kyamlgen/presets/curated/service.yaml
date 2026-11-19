@@ -1,0 +1,17 @@
+# A Service gives a set of pods a stable name and address.
+#
+# `port` is what clients connect to; `targetPort` is the port on the container.
+# They are often different numbers.  Here `targetPort` is the *name* of the
+# container port, so the two stay in step when the container port changes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  type: ClusterIP
+  selector:
+    app: my-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

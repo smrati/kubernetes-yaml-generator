@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from . import __version__
+from .presets import curated_kinds, is_curated, preset_for
 from .registry import describe
 from .render import parse_yaml, to_bundle_yaml
 from .schemas import (
@@ -94,6 +95,7 @@ def _kinds(version: str) -> list[dict[str, Any]]:
             "plural": info.plural,
             "namespaced": info.namespaced,
             "authorable": info.authorable,
+            "curated": is_curated(info.kind),
             "note": info.note,
             "category": info.tags[0] if info.tags else "Other",
         }
@@ -151,6 +153,7 @@ def form(request: Request, apiVersion: str, kind: str, version: str | None = Non
             "api_version": api_version,
             "kind": kind,
             "tree": _client_tree(tree),
+            "preset": preset_for(kind),
             "info": {
                 "plural": info["plural"],
                 "namespaced": info["namespaced"],
@@ -169,10 +172,19 @@ def api_kinds(version: str | None = None) -> Any:
     return {"version": version, "kinds": _kinds(version)}
 
 
+@app.get("/api/presets")
+def api_presets() -> Any:
+    """The kinds that have a hand-written starting-point manifest."""
+    return {"kinds": list(curated_kinds())}
+
+
 @app.get("/api/tree")
 def api_tree(apiVersion: str, kind: str, version: str | None = None) -> Any:
     version = version or default_version()
-    return _widget_tree(version, kind, apiVersion)
+    return {
+        "tree": _client_tree(_widget_tree(version, kind, apiVersion)),
+        "preset": preset_for(kind),
+    }
 
 
 @app.post("/api/render")

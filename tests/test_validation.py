@@ -161,6 +161,54 @@ def test_service_selector_must_match_a_workload() -> None:
     assert "service-selector-unmatched" in codes(issues)
 
 
+def test_a_service_on_its_own_is_not_a_finding() -> None:
+    """The bundle is not the cluster.
+
+    A Service applied on its own may well route to a Deployment that already exists
+    in the cluster, so the absence of a workload from the bundle is not a problem.
+    """
+    assert analyse([service()]) == []
+
+
+def test_an_ingress_on_its_own_is_not_a_finding() -> None:
+    ingress = {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {"name": "api"},
+        "spec": {
+            "rules": [
+                {
+                    "host": "example.test",
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {"service": {"name": "api", "port": {"number": 80}}},
+                            }
+                        ]
+                    },
+                }
+            ]
+        },
+    }
+    assert analyse([ingress]) == []
+
+
+def test_an_hpa_on_its_own_is_not_a_finding() -> None:
+    hpa = {
+        "apiVersion": "autoscaling/v2",
+        "kind": "HorizontalPodAutoscaler",
+        "metadata": {"name": "api"},
+        "spec": {
+            "scaleTargetRef": {"apiVersion": "apps/v1", "kind": "Deployment", "name": "api"},
+            "minReplicas": 1,
+            "maxReplicas": 5,
+        },
+    }
+    assert analyse([hpa]) == []
+
+
 def test_service_target_port_must_match_a_container_port() -> None:
     broken = service()
     broken["spec"]["ports"][0]["targetPort"] = 9999

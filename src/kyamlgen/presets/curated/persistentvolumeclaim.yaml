@@ -1,0 +1,14 @@
+# A PersistentVolumeClaim is a request for storage.
+#
+# The cluster binds it to a PersistentVolume.  `storageClassName` picks the
+# class of storage; omit it to take the cluster's default.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-app-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

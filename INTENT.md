@@ -208,7 +208,7 @@ does not, and the bug appears only in one of them.
 The cost is that the form requires JavaScript. For a local developer tool that is the
 right trade. The CLI covers the no-browser case with the same validation.
 
-**Affects:** `architecture.md` §11.1
+**Affects:** `architecture.md` §12.1
 
 ---
 
@@ -232,7 +232,7 @@ introduced exactly this bug, and it is covered by a test that round-trips `on`,
 The renderer also applies a key preference list, because the schemas list properties
 alphabetically and `image` before `name` inside a container reads wrong.
 
-**Affects:** `architecture.md` §10
+**Affects:** `architecture.md` §11
 
 ---
 
@@ -306,7 +306,7 @@ Deployment and the Service you just wrote.
 This also matches how manifests are actually applied: `kubectl apply -f` on a
 multi-document file is the normal case, and it is atomic per object, not per file.
 
-**Affects:** `architecture.md` §9, §11
+**Affects:** `architecture.md` §9, §12
 
 ---
 
@@ -352,3 +352,94 @@ own rationale grows unreadable, and a log that carries design detail goes stale.
 Cross-referencing the two makes the lookup work in both directions.
 
 **Affects:** `architecture.md` §3, `architecture.md` preamble
+
+---
+
+## 2026-11-19 — Presets: hand-written manifests for seventeen kinds
+
+**Asked:** "We should have some default templates pre filled and a button to clean
+default values in single shot or deleting individual values with single click.
+Default templates help user in thinking clearly. While filling default values no
+need to make a very exhaustive template — instead have templated filled only to that
+level which people usually use."
+
+**Decided:** Seventeen kinds get a hand-written preset, applied automatically when
+the kind is opened. A preset is a **real YAML manifest**, not a form definition.
+The kinds are Deployment, Service, ConfigMap, Secret, Ingress, Namespace,
+StatefulSet, DaemonSet, Job, CronJob, PersistentVolumeClaim, ServiceAccount,
+HorizontalPodAutoscaler, NetworkPolicy, ResourceQuota, PodDisruptionBudget and Pod.
+
+Clearing is available at four granularities: a **×** on a field, a **Clear** on a
+section, a **×** on a map row, a **Remove** on an array item — plus **Clear values**
+and **Reset to template** for the whole object. A field is marked with a dot while
+it still holds the preset's value.
+
+**Why:**
+
+1. *A preset is a manifest.* This is the decision the feature rests on. If a preset
+   were described in some form-specific structure, it would be a second description
+   of the Kubernetes API — and it would drift from the schema, silently, the way
+   hand-written documentation drifts. As a manifest, a preset is loaded, validated
+   and rendered by exactly the same code as anything the user produces, and it
+   cannot drift: if it stops being valid, the test that validates every preset
+   fails. The schema stays the single source of truth.
+
+2. *Seventeen, hand-written, and no generator.* "All kinds" was the first ask, and
+   the honest answer was that a *generated* skeleton teaches less than a blank form
+   with the required fields called out — and it fills the form with values the user
+   has to read carefully to recognise as fake. A hand-written example teaches the
+   shape of a good manifest, which is the whole point. The other ~196 kinds open
+   empty, and that is a deliberate silence rather than a gap.
+
+3. *"Only to that level which people usually use."* The Deployment preset sets
+   replicas, labels, the selector, one container with a named port, resources with
+   both requests and limits, and two probes. Not a single field that the form hides
+   behind "advanced" — and that is enforced by a test that walks the widget tree
+   and the preset together, so a future edit to a preset cannot quietly start
+   setting fields the user cannot see.
+
+4. *Marking by value, not by tracking edits.* A field is marked when its current
+   value still equals the preset's value at that path. The alternative — recording
+   which fields the user has touched — needs state that has to be kept in step with
+   array insertions and removals. Comparing values needs no state at all, survives
+   reordering, and turns the marker into a live diff: every field starts marked,
+   and the moment the user types in one, that field loses its mark.
+
+5. *The Deployment and Service presets are one design.* They share the label
+   `app: my-app`, and the Service's `targetPort` is the *name* of the container
+   port rather than a repeated number. Adding both produces a bundle with zero
+   findings, which makes the preset a working demonstration of the coupling the
+   tool exists to check — and means the two ports cannot drift apart.
+
+**Affects:** `architecture.md` §10, §3 (D12)
+
+---
+
+## 2026-11-19 — The bundle is not the cluster
+
+**Asked:** (implicit, found while building the presets) Opening the Service preset
+on its own produced a warning: *"Service my-app selects app=my-app but no workload
+is part of this bundle, so the match cannot be checked here."* The same shape of
+warning fired for an Ingress with no Service in the bundle, and for an HPA whose
+target was not in the bundle.
+
+**Decided:** Removed the three "unverifiable" rules. A cross-object rule now fires
+only when the bundle **contains** the relevant kind and none of it matches. A
+reference that is simply absent from the bundle is not a finding.
+
+**Why:** These rules were wrong, not merely noisy. The bundle is not the cluster: a
+Service applied on its own may well route to a Deployment that already exists, and
+an HPA may well scale a workload that was applied in an earlier command. Treating
+absence as suspicious means warning about correct input — and **a warning that
+fires on correct input trains the user to ignore warnings**, which destroys the
+value of the rules that matter.
+
+The rule that survives is the useful one: when the bundle *does* contain Services
+and none is named `my-app`, that is a real mismatch and it is still an error. The
+tool checks what is in front of it and says nothing about what it cannot see.
+
+The `dangling-reference` rule stays a warning, because a ConfigMap or Secret
+referenced by a workload is exactly the kind of object the user is creating in the
+same session, and the warning disappears once they add it.
+
+**Affects:** `architecture.md` §9.1, §3 (D13)

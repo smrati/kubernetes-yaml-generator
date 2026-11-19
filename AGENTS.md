@@ -33,7 +33,7 @@ content here.
 
 ## Current state
 
-M1 complete; M2 and M3 substantially done. `architecture.md` §13 has the honest
+M1 complete; M2 and M3 substantially done. `architecture.md` §14 has the honest
 status table. M4 (server dry-run against a real cluster) is the only milestone
 blocked on infrastructure.
 
@@ -44,10 +44,14 @@ blocked on infrastructure.
 - `uv sync` to install, `uv add <pkg>` to add a dependency, `uv run <cmd>` to run.
 - `uv run kyamlgen serve` — the web app on <http://127.0.0.1:8000>.
 - `uv run kyamlgen kinds` — every kind in the schema bundle.
+- `uv run kyamlgen presets` — the kinds that have a hand-written template.
+- `uv run kyamlgen preset Deployment` — print one template.
 - `uv run kyamlgen tree <Kind> --api-version <group/version>` — the widget tree as
   JSON.
 - `uv run kyamlgen generate <Kind> --api-version <group/version> --values file.json`
   — a manifest from JSON values, without a browser.
+- `uv run kyamlgen generate <Kind> --api-version <group/version> --preset` — a
+  manifest starting from the kind's template.
 - `uv run kyamlgen validate manifest.yaml` — validate a file.
 - `uv run pytest` — the test suite.
 - `uv run ruff check src tests` — lint. `uv run ruff format src tests` to format.
@@ -63,8 +67,9 @@ blocked on infrastructure.
 | `validate.py` | Form-time checks and JSON Schema validation |
 | `semantics.py` | Cross-object rules over a bundle |
 | `render.py` | Pruning, key ordering, YAML output |
+| `presets/` | Hand-written starting-point manifests, one YAML file per kind |
 | `app.py` | FastAPI routes |
-| `cli.py` | `serve` / `kinds` / `tree` / `generate` / `validate` |
+| `cli.py` | `serve` / `kinds` / `presets` / `preset` / `tree` / `generate` / `validate` |
 | `static/formstate.js` | The form's data-path logic — shared by the browser and the Node tests |
 
 ## Ground rules — do not relax these
@@ -97,11 +102,20 @@ blocked on infrastructure.
    displays into an empty object in the submission, and the server then reports
    their missing required children as real errors. `formstate.js` separates
    `readContainer` from `ensureContainer` for exactly this reason.
+10. **A preset is a manifest.** The files in `presets/curated/` are real Kubernetes
+    manifests, loaded and validated by the same code as anything the user
+    produces. Do not introduce a second, form-specific way of describing them, and
+    do not add a field a preset sets that the form hides behind "advanced" —
+    there is a test for that.
+11. **The bundle is not the cluster.** A cross-object rule fires only when the
+    bundle *contains* the relevant kind and none of it matches. Absence is not a
+    finding: a warning that fires on correct input trains the user to ignore
+    warnings.
 
 ## Tests
 
-`uv run pytest` runs everything: 64 Python tests, plus a wrapper that runs the 12
-JavaScript tests under `node --test`. 65 checks in total, one command.
+`uv run pytest` runs everything: 112 Python tests, plus a wrapper that runs the 19
+JavaScript tests under `node --test`. One command covers the whole project.
 
 | File | Covers |
 |---|---|
@@ -109,13 +123,16 @@ JavaScript tests under `node --test`. 65 checks in total, one command.
 | `test_widgets.py` | Widget mapping, required fields, visibility, recursion guard, **every kind builds** |
 | `test_validation.py` | Form-time checks, schema validation, every semantic rule |
 | `test_render.py` | Key ordering, YAML 1.1 quoting, pruning, multi-document output |
+| `test_presets.py` | **Every preset validates cleanly**; presets use only common fields; the Deployment and Service presets form a clean bundle |
 | `test_api.py` | End-to-end HTTP behaviour |
 | `test_javascript.py` | Runs `tests/js/formstate.test.js` under `node --test` |
-| `js/formstate.test.js` | The form's path arithmetic: `getIn`, `setIn`, `readContainer`, `ensureContainer` |
+| `js/formstate.test.js` | The form's path arithmetic: `getIn`, `setIn`, `deleteIn`, `readContainer`, `ensureContainer` |
 
-Two of these matter more than the rest:
+Three of these matter more than the rest:
 
 - `test_widgets.py::test_every_kind_in_the_bundle_builds_a_tree` walks every kind in
   the schema bundle and fails if any of them breaks the form engine.
+- `test_presets.py::test_curated_presets_use_only_common_fields` enforces the rule
+  that a preset may not set a field the form hides behind "advanced".
 - `js/formstate.test.js::reading a path never disturbs the data` pins the bug
   described in rule 9 above.

@@ -1,0 +1,20 @@
+# A Job runs a task to completion and then stops.
+#
+# `restartPolicy: Never` is what tells Kubernetes this pod is a one-shot rather
+# than a service.  `backoffLimit` is how many times a failed pod may be retried.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: my-task
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: task
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - echo hello && sleep 5

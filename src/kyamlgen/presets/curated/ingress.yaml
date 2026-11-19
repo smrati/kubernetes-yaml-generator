@@ -1,0 +1,20 @@
+# An Ingress routes HTTP traffic to a Service.
+#
+# The backend must name a Service that exists and expose the port you point
+# at.  `pathType: Prefix` means "/api" matches "/api/v1/users" as well.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app
+spec:
+  rules:
+    - host: my-app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: my-app
+                port:
+                  number: 80

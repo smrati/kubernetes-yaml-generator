@@ -1,0 +1,15 @@
+# A ResourceQuota caps how much of a namespace a set of objects may use.
+#
+# The keys are the resources being limited, not the fields of this object.  A
+# quota that exists but is never enforced is worse than no quota at all — it
+# blocks pod creation without telling you why.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: my-app-quota
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi

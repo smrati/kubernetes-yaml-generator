@@ -1,0 +1,23 @@
+# A NetworkPolicy restricts traffic to and from selected pods.
+#
+# `podSelector` picks the pods the policy applies to.  Declaring both
+# policyTypes matters: a policy with only ingress rules still allows all
+# egress, which surprises people.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: my-app
+spec:
+  podSelector:
+    matchLabels:
+      app: my-app
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: my-app
+      ports:
+        - protocol: TCP
+          port: 8080

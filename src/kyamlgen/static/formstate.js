@@ -99,10 +99,56 @@
     return node;
   }
 
+  /*
+   * Delete the value at a path.
+   *
+   * Used by the per-field and per-section clear buttons.  A numeric last segment
+   * means an array element, which is removed with splice — `delete arr[0]` would
+   * leave a hole and shift every later item.
+   */
+  function deleteIn(root, parts) {
+    if (!parts.length) return root;
+    var node = root;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (node === null || node === undefined || typeof node !== "object") {
+        return root;
+      }
+      node = node[parts[i]];
+    }
+    if (node === null || node === undefined || typeof node !== "object") {
+      return root;
+    }
+    var last = parts[parts.length - 1];
+    if (typeof last === "number" && Array.isArray(node)) {
+      node.splice(last, 1);
+    } else {
+      delete node[last];
+    }
+    return root;
+  }
+
+  /* Deep copy through JSON — the data model is plain JSON by construction. */
+  function deepCopy(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  }
+
+  /* Whether two JSON values are equal, for comparing against the preset. */
+  function deepEqual(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || a === undefined || b === undefined) {
+      return false;
+    }
+    if (typeof a !== "object" || typeof b !== "object") return false;
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
   return {
     getIn: getIn,
     setIn: setIn,
+    deleteIn: deleteIn,
     readContainer: readContainer,
-    ensureContainer: ensureContainer
+    ensureContainer: ensureContainer,
+    deepCopy: deepCopy,
+    deepEqual: deepEqual
   };
 });

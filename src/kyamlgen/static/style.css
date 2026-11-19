@@ -193,6 +193,9 @@ a:hover {
 
 .kind-card .kind-name {
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .kind-card .kind-api {
@@ -403,6 +406,93 @@ a:hover {
 .field .req {
   color: var(--error);
   font-size: 11px;
+}
+
+/* A field that still holds the template's value. */
+.preset-dot {
+  color: var(--accent);
+  opacity: 0.55;
+  font-size: 15px;
+  line-height: 1;
+  cursor: help;
+}
+
+.preset-hint {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 6px 6px 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.preset-hint .preset-dot {
+  font-size: 13px;
+}
+
+/* The input plus its one-click clear button. */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-row > .input,
+.field-row > .select,
+.field-row > .textarea,
+.field-row > .checkbox-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.clear-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 26px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
+}
+
+.field-row:hover .clear-btn,
+.field-row:focus-within .clear-btn,
+.clear-btn:focus {
+  opacity: 1;
+}
+
+.clear-btn:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+/* A section's one-click clear, in the section header. */
+.clear-section {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--sans);
+  cursor: pointer;
+  opacity: 0;
+  padding: 0 4px;
+  transition: opacity 0.1s ease-in-out;
+}
+
+details.fieldset > summary:hover .clear-section,
+.clear-section:focus {
+  opacity: 1;
+}
+
+.clear-section:hover {
+  color: var(--error);
 }
 
 .field .hint {

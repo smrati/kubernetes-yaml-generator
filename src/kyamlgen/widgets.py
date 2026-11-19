@@ -264,6 +264,7 @@ FIELD_ENUMS: dict[tuple[str, str], list[str]] = {
         "bootstrap.kubernetes.io/token",
     ],
     ("io.k8s.api.core.v1.ConditionStatus", "status"): ["True", "False", "Unknown"],
+    ("io.k8s.api.networking.v1.NetworkPolicyPort", "protocol"): ["TCP", "UDP", "SCTP"],
 }
 
 #: Enum values for the *items* of an array field.
@@ -281,6 +282,7 @@ ITEM_ENUMS: dict[tuple[str, str], list[str]] = {
         "ReadWriteOncePod",
     ],
     ("io.k8s.api.core.v1.ServiceSpec", "ipFamilies"): ["IPv4", "IPv6"],
+    ("io.k8s.api.networking.v1.NetworkPolicySpec", "policyTypes"): ["Ingress", "Egress"],
 }
 
 #: Friendly labels for fields whose names do not read well when title-cased.

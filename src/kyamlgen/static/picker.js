@@ -52,6 +52,13 @@
         const title = document.createElement("span");
         title.className = "kind-name";
         title.textContent = kind.kind;
+        if (kind.curated) {
+          const dot = document.createElement("span");
+          dot.className = "preset-dot";
+          dot.title = "Has a starting-point template";
+          dot.textContent = "•";
+          title.appendChild(dot);
+        }
 
         const api = document.createElement("span");
         api.className = "kind-api";

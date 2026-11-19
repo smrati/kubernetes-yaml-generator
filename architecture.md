@@ -9,13 +9,14 @@ A form-driven Kubernetes YAML generator with cross-object semantic validation.
   `INTENT.md` that records *why* it was taken.
 - **§4** is the system architecture. The rest of the document walks each layer in
   the order data flows through it.
-- **§13** records what is built, what is not, and what comes next.
-- **§14** lists the open questions.
+- **§13** is the module layout.
+- **§14** records what is built, what is not, and what comes next.
+- **§15** lists the open questions.
 
 `INTENT.md` is the append-only decision log. `architecture.md` is the design of record.
 Neither duplicates the other: this document says *what*, `INTENT.md` says *why*.
 
-Status: **M1 complete** — see §13.
+Status: **M1 complete** — see §14.
 
 ---
 
@@ -47,7 +48,7 @@ semantic engine that understands how Kubernetes objects reference each other.
 
 **Out of scope**
 
-- Applying to a cluster (deferred to M4 — see §13).
+- Applying to a cluster (deferred to M4 — see §14).
 - Custom Resource Definitions authored through the form (the schema for a CRD is
   self-referential; the engine falls back to raw JSON for the recursive part, §6.3).
 - Hosting, accounts, persistence. The tool is local and stateless.
@@ -86,6 +87,8 @@ semantic engine that understands how Kubernetes objects reference each other.
 | D9 | `status` and other server-owned fields are never offered | 2026-11-19 |
 | D10 | The form is rendered by JavaScript from the widget tree; the server renders the page shell only | 2026-11-19 |
 | D11 | The schema bundle's file naming is irregular, so the kind index is authoritative | 2026-11-19 |
+| D12 | Presets are hand-written *manifests*, not form definitions; seventeen kinds have one | 2026-11-19 |
+| D13 | A reference missing from the bundle is not a finding — the bundle is not the cluster | 2026-11-19 |
 
 ---
 
@@ -313,11 +316,9 @@ else is a warning.
 | `selector-template-mismatch` | A workload's `selector.matchLabels` must match its own pod template labels | error |
 | `service-selector-unmatched` | A Service's selector must match a workload in the bundle | error |
 | `service-empty-selector` | A Service with no selector routes to nothing | warning |
-| `service-selector-unverifiable` | No workload in the bundle, so the match cannot be checked | warning |
 | `target-port-unmatched` | `targetPort` must match a container port, by number or by name | error |
 | `ingress-backend-missing` | An Ingress backend must reference a Service in the bundle | error |
 | `ingress-backend-port-missing` | …on a port that Service actually exposes | error |
-| `ingress-backend-unverifiable` | No Service in the bundle | warning |
 | `scaler-target-missing` | An HPA must target a workload in the bundle | warning |
 | `dangling-reference` | A referenced ConfigMap, Secret or PVC is not in the bundle | warning |
 | `namespace-mismatch` | Objects in one bundle disagree about their namespace | warning |
@@ -325,12 +326,118 @@ else is a warning.
 | `no-probe` | A long-running workload container has no health probe | warning |
 | `limit-without-request` | Resource limits without requests | warning |
 
-"Dangling" references are warnings rather than errors because the referenced object
-may already exist in the cluster; the tool can only see the bundle.
+### 9.1 The bundle is not the cluster (D13)
+
+Every rule above fires only when the bundle **contains** the relevant kind and none
+of them matches. A reference that is simply absent from the bundle is not a
+finding, because the object it names may already exist in the cluster.
+
+```text
+bundle has Services, none named "my-app"  →  error   (a real mismatch)
+bundle has no Services at all               →  silent  (cannot know, and that is normal)
+```
+
+This is not a cosmetic rule. An earlier version warned "no workload is part of this
+bundle" whenever a Service was generated on its own — which is the single most
+common way to use the tool, and a warning that fires on correct input trains the
+user to ignore warnings. The rule now matches the tool's own scope: it checks what
+is in front of it, and says nothing about what it cannot see.
+
+"Dangling" references to a ConfigMap, Secret or PVC stay warnings, because they
+name an object the user is likely creating in the same session.
 
 ---
 
-## 10. Renderer (`render.py`)
+## 10. Presets (`presets/`)
+
+A **preset** is a hand-written starting-point manifest for a kind. It is applied
+automatically when the kind is opened, and it is what makes the form teach rather
+than merely accept input.
+
+### 10.1 A preset is a manifest, not a form definition
+
+This is the decision the whole feature rests on (D12). A preset is a YAML file
+containing a real Kubernetes manifest, and it is loaded, validated and rendered by
+exactly the same code paths as anything the user produces.
+
+The alternative — describing presets in some form-specific structure — would need a
+second description of the API, and it would drift from the schema. A preset that is
+a manifest cannot drift: if it stops being valid, the test that validates every
+preset fails.
+
+```
+src/kyamlgen/presets/
+  __init__.py           loader: preset_for(kind), curated_kinds(), is_curated(kind)
+  curated/*.yaml        one hand-written manifest per kind
+```
+
+### 10.2 Which kinds have one, and how far they go
+
+Seventeen kinds have a preset: Deployment, Service, ConfigMap, Secret, Ingress,
+Namespace, StatefulSet, DaemonSet, Job, CronJob, PersistentVolumeClaim,
+ServiceAccount, HorizontalPodAutoscaler, NetworkPolicy, ResourceQuota,
+PodDisruptionBudget, Pod.
+
+The rule for what goes in one is **the level people actually use**, not the level
+the schema permits. The Deployment preset sets replicas, labels, the selector, one
+container with a named port, resources with both requests and limits, and two
+probes. It sets nothing else, and every field it does set is one the form shows
+without opening the "advanced" disclosure.
+
+The rest of the kinds have no preset and open empty. That is deliberate. A
+generated skeleton for an obscure kind teaches less than a blank form with the
+required fields called out, and it would fill the form with values the user has to
+read carefully in order to recognise as fake.
+
+### 10.3 The presets work together
+
+The Deployment and Service presets are one design, not two. They share the label
+`app: my-app`, and the Service's `targetPort` is the *name* of the container port
+rather than a repeated number:
+
+```yaml
+# Deployment                        # Service
+containers:                          selector:
+  - ports:                             app: my-app
+      - name: http                   ports:
+        containerPort: 8080             - name: http
+                                            port: 80
+                                            targetPort: http
+```
+
+Adding both objects produces a bundle with **zero findings** — the selector
+matches, the target port resolves, and no rule fires. The preset is therefore a
+working demonstration of the coupling the tool exists to check, not just a filled-in
+form. It also means the two ports cannot drift: renaming the container port keeps
+the Service pointing at it.
+
+### 10.4 Marking and clearing
+
+A field is marked when its **current value still equals the preset's value at that
+path**. Comparing values rather than tracking edits means the marker needs no state
+of its own and survives an array being reordered. The marker is a live diff: every
+field starts marked, and the moment the user types in one, that field loses its
+mark.
+
+Clearing is available at four granularities:
+
+| Control | Scope |
+|---|---|
+| **×** beside a field | that one value |
+| **Clear** in a section header | that whole subtree |
+| **×** beside a map row | that key/value pair |
+| **Remove** on an array item | that item |
+
+And two toolbar actions on the active object: **Clear values** empties it, **Reset
+to template** puts the preset back.
+
+Clearing an object also has to drop that object's cached map rows. Otherwise the
+rows reappear on the next render and put the values straight back — the same
+class of bug as the renderer-creates-data one (§13.1).
+
+---
+
+## 11. Renderer (`render.py`)
 
 ### 10.1 Key order (D6)
 
@@ -357,14 +464,15 @@ object, so a required field that was never touched is still reported.
 
 ---
 
-## 11. Web application (`app.py`)
+## 12. Web application (`app.py`)
 
 | Route | Purpose |
 |---|---|
 | `GET /` | Kind picker, grouped by category, searchable |
 | `GET /form?apiVersion=&kind=` | The workbench |
 | `GET /api/kinds` | The kind catalogue |
-| `GET /api/tree` | The widget tree for a kind |
+| `GET /api/presets` | The kinds that have a hand-written preset |
+| `GET /api/tree` | The widget tree for a kind, plus its preset |
 | `POST /api/render` | Validate a bundle of objects and return YAML plus issues |
 | `POST /api/validate` | Validate pasted YAML and re-render it canonically |
 | `GET /healthz` | Liveness |
@@ -385,7 +493,7 @@ right trade.
 
 ---
 
-## 12. Module layout
+## 13. Module layout
 
 ```
 src/kyamlgen/
@@ -395,8 +503,11 @@ src/kyamlgen/
   validate.py    form-time checks, JSON Schema validation
   semantics.py   cross-object rules
   render.py      pruning, key ordering, YAML output
+  presets/       hand-written starting-point manifests (§10)
+    __init__.py  loader
+    curated/     one YAML manifest per kind
   app.py         FastAPI routes
-  cli.py         serve / kinds / tree / generate / validate
+  cli.py         serve / kinds / tree / generate / validate / presets / preset
   templates/     base.html, index.html, form.html
   static/
     style.css    the whole stylesheet
@@ -408,12 +519,13 @@ tests/
   test_widgets.py    widget mapping, required fields, visibility, recursion guard
   test_validation.py form-time checks, schema validation, every semantic rule
   test_render.py     key ordering, YAML 1.1 quoting, pruning, multi-document output
+  test_presets.py    every preset validates; presets use only common fields
   test_api.py        end-to-end HTTP behaviour
   test_javascript.py runs the Node tests below
   js/formstate.test.js  the form's path arithmetic, under `node --test`
 ```
 
-### 12.1 Why the form's data logic is a separate file
+### 13.1 Why the form's data logic is a separate file
 
 Every bug found while building the form lived in the path arithmetic — the code that
 decides where in the nested object a value belongs — and not in the DOM code. One of
@@ -428,7 +540,7 @@ from pytest, so `uv run pytest` still covers the whole project.
 
 ---
 
-## 13. Status and milestones
+## 14. Status and milestones
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -437,11 +549,12 @@ from pytest, so `uv run pytest` still covers the whole project.
 | M2 | Semantic engine, cross-object checks, multi-object bundles | **done** (bundles and semantics); shared-value propagation still to do |
 | M3 | Four-layer validation surfaced inline; raw-YAML mode for every kind | **partial** — layers 1–3 done, raw-YAML paste mode done, per-kind raw editor not done |
 | M4 | Apply service (`kubectl --dry-run=server`, then apply) | **not started** — needs a local cluster (`kind`); Docker is already installed |
-| M5 | Ownership advisories, manifest library, Kustomize export | **partial** — advisories done; library and Kustomize export not started |
+| M5 | Ownership advisories, manifest library, Kustomize export | **partial** — advisories and presets done; library and Kustomize export not started |
+| — | Curated presets for seventeen kinds, with per-field and per-section clearing | **done** (§10) |
 
 ---
 
-## 14. Open questions
+## 15. Open questions
 
 1. **Shared-value propagation.** The bundle model lets a Deployment and a Service be
    generated together, but the labels and ports are still typed twice. Should
