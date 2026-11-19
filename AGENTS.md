@@ -58,6 +58,31 @@ blocked on infrastructure.
 - `uv run ruff check src tests` — lint. `uv run ruff format src tests` to format.
   Both are configured in `pyproject.toml`; keep them passing.
 
+## Commits
+
+This project follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/),
+the same convention as the wiki:
+
+```
+<type>(<scope>): <description>
+
+<body wrapped at 100 chars>
+
+<footer>
+```
+
+- **Type** — one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
+  `build`, `ci`, `chore`, `revert`. Lowercase.
+- **Scope** — optional. Omit it when the change spans more than one top-level folder,
+  which is most commits here (`src/`, `tests/`, and the root docs).
+- **Description** — imperative mood, lowercase first letter, no trailing period, and
+  the whole subject line ≤ 72 characters.
+- **Body** — why, not what. Wrapped at 100 characters, separated from the subject by
+  a blank line.
+- **Breaking changes** — `!` after the scope, plus a `BREAKING CHANGE:` footer.
+
+Never commit silently: show the message, then commit. Do not push unless asked.
+
 ## Module map
 
 | Module | Responsibility |
