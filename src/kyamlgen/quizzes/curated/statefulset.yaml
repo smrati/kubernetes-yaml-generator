@@ -1,0 +1,93 @@
+kind: StatefulSet
+questions:
+  - prompt: >-
+      What does a StatefulSet guarantee that a Deployment does not?
+    options:
+      - Faster pod startup
+      - Stable pod names and per-replica storage
+      - Automatic scaling on CPU
+      - Guaranteed pod restart on failure
+    answer: 1
+    why: >-
+      The pods keep the names `my-app-0`, `my-app-1`, and each gets its own volume
+      from the claim templates. Everything else a StatefulSet does, a Deployment
+      does too.
+
+  - prompt: >-
+      What is spec.serviceName for in a StatefulSet?
+    options:
+      - The Service that gives the pods their stable DNS names
+      - The Service the pods send their traffic to
+      - The Service that triggers a rolling restart
+      - The namespace the StatefulSet lives in
+    answer: 0
+    why: >-
+      Each pod gets a DNS name of `<pod>.<serviceName>.<namespace>.svc`. The
+      StatefulSet does not create that Service, and the pod will not appear in DNS
+      without it.
+
+  - prompt: >-
+      What does volumeClaimTemplates do?
+    options:
+      - Creates one PersistentVolumeClaim per pod replica, and keeps it
+      - Creates one shared volume for all replicas
+      - Copies the pod's filesystem into a new volume on restart
+      - Mounts the node's local disk into each pod
+    answer: 0
+    why: >-
+      Each replica gets its own claim, and the claim outlives the pod. Scaling down
+      leaves the claims behind — which is what you want for a database, and what you
+      do not want for anything else.
+
+  - prompt: >-
+      A StatefulSet has three replicas. What happens when you scale it to five?
+    options:
+      - The two new pods start immediately, in parallel
+      - The pods start one at a time, in ordinal order
+      - The old pods are deleted first, then the new ones start
+      - Nothing — a StatefulSet's replicas are immutable
+    answer: 1
+    why: >-
+      StatefulSet Pods start in order and each must be Ready before the next begins.
+      That ordering is the point of the object, and it is also its cost on a stateless
+      service.
+
+  - prompt: >-
+      What happens to the PersistentVolumeClaims when you scale a StatefulSet down
+      from three replicas to one?
+    options:
+      - They are deleted along with the pods
+      - They are kept, and become orphaned
+      - They are merged into one claim
+      - They are resized to fit
+    answer: 1
+    why: >-
+      The claims are kept. This is deliberate — the data is still there — but it
+      means you have to clean them up yourself, and the orphaned claims still count
+      against a ResourceQuota.
+
+  - prompt: >-
+      Why is a StatefulSet a poor choice for a stateless web service?
+    options:
+      - It cannot be scaled past ten replicas
+      - The ordered startup and per-replica storage cost you something you do not need
+      - It does not support rolling updates
+      - It requires a StatefulSet-specific service account
+    answer: 1
+    why: >-
+      Every StatefulSet feature is a cost when you do not need it: pods start in
+      order, so one slow replica blocks the rest, and every replica gets a volume
+      whether or not it stores anything.
+
+  - prompt: >-
+      A StatefulSet's rolling update replaces its pods. In what order?
+    options:
+      - Lowest ordinal first, one at a time
+      - Highest ordinal first, one at a time, waiting for each to be Ready
+      - All at once
+      - Highest ordinal first, all at once
+    answer: 1
+    why: >-
+      From the highest ordinal down, one pod at a time, each waiting for Ready. The
+      order is reversed on purpose: the last replica is the most likely to be
+      holding something that must not be lost.

@@ -1,0 +1,104 @@
+kind: Ingress
+questions:
+  - prompt: >-
+      What is the difference between a Service and an Ingress?
+    options:
+      - Nothing, they are interchangeable
+      - A Service routes to pods; an Ingress routes HTTP traffic to Services
+      - A Service is for HTTP; an Ingress is for everything else
+      - A Service is cluster-scoped; an Ingress is namespaced
+    answer: 1
+    why: >-
+      A Service is a stable address for a set of pods, whatever the protocol. An
+      Ingress is a rule set in front of Services — it needs an Ingress controller to
+      do anything.
+
+  - prompt: >-
+      What are the three values of pathType?
+    options:
+      - Exact, Prefix and ImplementationSpecific
+      - Exact, Regex and Prefix
+      - Exact, Prefix and Wildcard
+      - Static, Dynamic and Exact
+    answer: 0
+    why: >-
+      `ImplementationSpecific` is the old default and means "the controller decides",
+      which is how two controllers end up behaving differently for the same manifest.
+      Prefer `Exact` or `Prefix`.
+
+  - prompt: >-
+      With pathType: Prefix and path: /api, which of these paths matches?
+    options:
+      - /api and /api/v1/users
+      - /api only
+      - /api, /api/v1/users and /apifoo
+      - Any path that starts with the characters /api
+    answer: 0
+    why: >-
+      Prefix matching splits on `/`, so `/api` matches `/api` and `/api/v1/users` but
+      not `/apifoo`. The difference between segment matching and string-prefix
+      matching is the thing people get wrong.
+
+  - prompt: >-
+      An Ingress backend names a Service that does not exist. What happens?
+    options:
+      - The API server rejects the Ingress
+      - The Ingress is accepted and serves 503s
+      - The Ingress controller creates the Service
+      - The Ingress is deleted
+    answer: 1
+    why: >-
+      The Ingress is accepted — the name is just a string — and every request to that
+      path gets a 503. This is why the tool checks that an Ingress backend matches a
+      Service in the same bundle.
+
+  - prompt: >-
+      What does IngressClass do?
+    options:
+      - It selects which Ingress controller handles the Ingress
+      - It sets the TLS certificate
+      - It limits the number of routes
+      - It chooses the namespace
+    answer: 0
+    why: >-
+      An Ingress object says *what* the routing should be; the IngressClass says
+      *which* controller implements it. A cluster with two controllers and no
+      IngressClass is a cluster where nobody knows which one wins.
+
+  - prompt: >-
+      What does an Ingress do that a Service does not?
+    options:
+      - Terminate TLS and route by host and path
+      - Load balance across pods
+      - Give pods a stable DNS name
+      - Select pods by label
+    answer: 0
+    why: >-
+      Host and path routing, plus TLS termination, is the Ingress's job. Everything
+      else on that list is a Service's.
+
+  - prompt: >-
+      An Ingress backend points at a Service on port 80, but the Service exposes 8080.
+      What happens?
+    options:
+      - The Ingress controller rewrites the port
+      - The Ingress is accepted and every request to that path gets a 503
+      - The Ingress is rejected by the API server
+      - The Service gains a port 80
+    answer: 1
+    why: >-
+      The port is part of the reference, not a hint. The Ingress resolves the Service
+      and looks for that port on it; not finding it, it has nowhere to send the
+      traffic.
+
+  - prompt: >-
+      Where does an Ingress need to live relative to the Service it points at?
+    options:
+      - It can be in any namespace
+      - In the same namespace as the Service
+      - In the kube-system namespace
+      - In the namespace named by the IngressClass
+    answer: 1
+    why: >-
+      An Ingress references a Service by name, with no namespace, so it resolves
+      within its own namespace. Cross-namespace routing needs a different mechanism.

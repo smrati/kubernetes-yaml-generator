@@ -1,0 +1,91 @@
+kind: PersistentVolume
+questions:
+  - prompt: >-
+      What is a PersistentVolume, in one sentence?
+    options:
+      - A request for storage
+      - A piece of storage in the cluster that exists independently of any pod
+      - The storage a pod is currently using
+      - A type of StorageClass
+    answer: 1
+    why: >-
+      A PV is the storage; a PersistentVolumeClaim is the request for it. The two are
+      bound to each other, and the PV outlives whatever pod happens to be using it.
+
+  - prompt: >-
+      What does a PV's claimRef record?
+    options:
+      - Which claim the PV is bound to
+      - The storage capacity of the PV
+      - The pod that is mounting the PV
+      - The StorageClass of the PV
+    answer: 0
+    why: >-
+      The claim the PV is bound to. It is immutable for the same reason a selector
+      is: it is part of the object's identity, and changing it would silently
+      rebind storage.
+
+  - prompt: >-
+      What happens to a PV when its bound claim is deleted?
+    options:
+      - It is deleted immediately
+      - It goes to Released, and what happens next depends on the reclaim policy
+      - It goes back to Available automatically
+      - It is rebound to any new claim
+    answer: 1
+    why: >-
+      It goes to `Released` — bound to a claim that no longer exists. Whether the
+      data survives depends on reclaimPolicy: `Retain` keeps it for an
+      administrator, `Delete` destroys it.
+
+  - prompt: >-
+      What does reclaimPolicy: Retain do?
+    options:
+      - Keeps the storage when the claim is deleted, leaving the PV for an
+        administrator to clean up
+      - Keeps the PV in Released until another claim binds it
+      - Copies the data to another volume
+      - Deletes the PV but keeps the underlying disk
+    answer: 0
+    why: >-
+      It keeps both the PV object and the underlying storage. It is the right choice
+      for anything you would be upset to lose — and the default for dynamically
+      provisioned cloud volumes is `Delete`, which destroys the disk with it.
+
+  - prompt: >-
+      What is special about a volume of type Local?
+    options:
+      - It is a directory on one node, and the pod using it is pinned to that node
+      - It is stored on every node and replicated
+      - It is slower than a network volume
+      - It cannot be resized
+    answer: 0
+    why: >-
+      A Local volume is a directory on one machine. The pod cannot be rescheduled
+      elsewhere, which makes it fast and makes the node a single point of failure.
+
+  - prompt: >-
+      Who creates a PersistentVolume in a managed cluster?
+    options:
+      - Usually nobody — a claim triggers dynamic provisioning from a StorageClass
+      - The user, always
+      - The scheduler
+      - The kubelet
+    answer: 0
+    why: >-
+      Usually the StorageClass's provisioner does, in response to a claim. Writing
+      PVs by hand is for the case where you want a specific piece of storage
+      provisioned in a particular way.
+
+  - prompt: >-
+      What is the difference between a PV's capacity and a claim's request?
+    options:
+      - The claim's request is the exact amount it gets; a larger PV may be bound to it
+      - They must be equal
+      - The PV's capacity wins
+      - The claim's request is a minimum
+    answer: 0
+    why: >-
+      A claim that asks for 10Gi may be bound to a 100Gi PV, and it gets the whole
+      thing. This is why a storage class with a large default size quietly costs more
+      than you asked for.

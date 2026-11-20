@@ -1,0 +1,91 @@
+kind: DaemonSet
+questions:
+  - prompt: >-
+      How many pods does a DaemonSet run on a cluster with five nodes?
+    options:
+      - Whatever spec.replicas says
+      - One on each node, so five
+      - One in total, on the busiest node
+      - One on each node that matches its nodeSelector
+    answer: 3
+    why: >-
+      A DaemonSet has no replicas field at all. The count is the number of eligible
+      nodes — every node that matches its nodeSelector and tolerations.
+
+  - prompt: >-
+      What happens when a new node joins the cluster?
+    options:
+      - The DaemonSet's pod is scheduled onto it automatically
+      - The DaemonSet controller must be told to add the node
+      - The new node stays empty until the DaemonSet is reapplied
+      - Only DaemonSets with a nodeSelector get a pod
+    answer: 0
+    why: >-
+      The controller watches for nodes and places a pod on each new one. This is
+      exactly why a DaemonSet is the right shape for a log shipper: new machines
+      join and start reporting without anyone doing anything.
+
+  - prompt: >-
+      Why does a DaemonSet have no spec.replicas?
+    options:
+      - Because replicas is deprecated for DaemonSets
+      - Because the count is implied by the number of nodes
+      - Because you set it through the HorizontalPodAutoscaler instead
+      - Because replicas is only valid on Deployments
+    answer: 1
+    why: >-
+      There is no such thing as "the number of pods a DaemonSet should have". The
+      number of nodes is the number of pods, and it changes on its own.
+
+  - prompt: >-
+      Which is the typical use for a DaemonSet?
+    options:
+      - A user-facing web service
+      - A node-level agent, such as a log shipper or metrics collector
+      - A one-off migration task
+      - A database with per-replica storage
+    answer: 1
+    why: >-
+      A DaemonSet is for things that must run on every node rather than things that
+      should scale with load. A web service belongs on a Deployment, where "replicas"
+      is a number you choose.
+
+  - prompt: >-
+      Your DaemonSet should not run on control-plane nodes. How do you say so?
+    options:
+      - Add a nodeSelector that matches only the worker nodes
+      - Set spec.replicas to the number of workers
+      - Add a toleration for the control-plane taint
+      - Set spec.affinity to a required node affinity
+    answer: 0
+    why: >-
+      A nodeSelector restricts where the pod goes. Note the direction: control-plane
+      nodes usually carry a taint, so a pod that does not tolerate it will not be
+      scheduled there anyway — but a nodeSelector is the explicit statement.
+
+  - prompt: >-
+      A DaemonSet's pod is not scheduled onto a node. What is the most likely cause?
+    options:
+      - The node has a taint the pod does not tolerate
+      - The DaemonSet's image cannot be pulled
+      - The pod's memory request is too large
+      - The DaemonSet has too many replicas
+    answer: 0
+    why: >-
+      A DaemonSet tolerates the standard node taints out of the box, so anything
+      else that stops it scheduling is a taint you have not tolerated.
+
+  - prompt: >-
+      How is a DaemonSet different from a Deployment when a node fails?
+    options:
+      - Nothing — both replace their pods
+      - A DaemonSet's pod is rescheduled to another node; a Deployment's pod is also
+        replaced
+      - A DaemonSet's pod is gone with the node; a Deployment's is replaced
+      - A Deployment's pod is gone with the node; a DaemonSet's is replaced
+    answer: 2
+    why: >-
+      Both replace their pods — but the replacement happens in different places. A
+      Deployment's pod is rescheduled elsewhere and the ReplicaSet counts it. A
+      DaemonSet's replacement goes onto a different node, because the original node
+      is gone; the pod count follows the node count.

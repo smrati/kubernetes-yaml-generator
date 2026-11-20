@@ -1,0 +1,93 @@
+kind: ResourceQuota
+questions:
+  - prompt: >-
+      What does a ResourceQuota limit?
+    options:
+      - The resources one team may use across all namespaces
+      - The resources one pod may use
+      - The number of nodes
+      - The total resources the objects in one namespace may use
+    answer: 3
+    why: >-
+      Per namespace. The scope is the namespace, which is also the unit of ownership
+      and of billing — which is why a quota is usually paired with a namespace per
+      team.
+
+  - prompt: >-
+      A quota sets requests.cpu. What does it count?
+    options:
+      - The requests that objects declare, not the CPU they actually use
+      - The CPU the pods are really using
+      - The node's total CPU
+      - The limit, if one is set
+    answer: 0
+    why: >-
+      What is *declared*. A quota on requests.cpu counts the requests in the
+      namespace, so a pod that requests 2 CPUs and uses 100m still consumes 2 CPUs of
+      the quota.
+
+  - prompt: >-
+      Your quota sets requests.cpu, but the pods do not set requests. What happens?
+    options:
+      - The quota counts nothing, because nothing declares a request
+      - The pods are rejected
+      - The pods get a default request
+      - The quota is ignored
+    answer: 0
+    why: >-
+      The quota counts nothing, so the limit is not enforced — which is the quiet
+      failure mode. A quota is only as good as the requests it is counting, and
+      requests are what a scheduler needs anyway.
+
+  - prompt: >-
+      A namespace's quota is exhausted. What happens to a new pod?
+    options:
+      - It is rejected, including the pod you would use to fix the problem
+      - It is admitted with no limits
+      - It is admitted and the quota is exceeded
+      - It is queued until quota is freed
+    answer: 0
+    why: >-
+      The API server refuses it. And because the refusal applies to every pod in the
+      namespace, including the cleanup pod, a namespace whose quota is full needs an
+      administrator — which is why `kubectl describe quota` is worth reading before
+      tightening one.
+
+  - prompt: >-
+      Does a ResourceQuota reserve capacity on the cluster?
+    options:
+      - No — it only refuses further objects once the total is reached
+      - Yes, it reserves the resources for the namespace
+      - Yes, for the pods in the namespace
+      - Only for CPU
+    answer: 0
+    why: >-
+      It does not reserve anything. The scheduler still places pods anywhere that
+      fits, and the quota simply starts saying no once the namespace has used its
+      share. It is a guard rail, not a scheduler.
+
+  - prompt: >-
+      What is the difference between limits.cpu and requests.cpu in a quota?
+    options:
+      - requests.cpu counts declared requests; limits.cpu counts declared limits
+      - They are the same thing
+      - limits.cpu is a cap on the whole namespace's CPU usage
+      - requests.cpu is only enforced when there is no limit
+    answer: 0
+    why: >-
+      Both count declarations, not usage. A namespace where every pod sets both gets
+      counted against both quotas, which is why a quota listing only `requests.*`
+      is a common and reasonable choice.
+
+  - prompt: >-
+      A quota can also limit the number of objects. What does requests.storage in a
+      quota limit?
+    options:
+      - The total persistent storage claimed in the namespace
+      - The memory of the pods
+      - The number of PVCs
+      - The ephemeral storage of the pods
+    answer: 0
+    why: >-
+      The total storage claimed by PersistentVolumeClaims in the namespace. It is
+      what stops a namespace from quietly claiming a terabyte of disk.

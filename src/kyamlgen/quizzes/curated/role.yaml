@@ -1,0 +1,91 @@
+kind: Role
+questions:
+  - prompt: >-
+      Where does a Role apply?
+    options:
+      - Only within its own namespace
+      - Across the whole cluster
+      - To the pods it selects
+      - To cluster-scoped resources only
+    answer: 0
+    why: >-
+      A Role is namespaced. For cluster-wide permissions you need a ClusterRole, and
+      for cluster-scoped *resources* — nodes, persistent volumes, namespaces — a Role
+      cannot grant access at all.
+
+  - prompt: >-
+      What does a Role with an empty rules list grant?
+    options:
+      - Access to the pods it selects
+      - Read access to everything in its namespace
+      - Full access to its own namespace
+      - Nothing
+    answer: 3
+    why: >-
+      Nothing, silently. A rule with an empty resource list, or an empty verb list,
+      grants nothing — and the Role looks perfectly valid. This is why the tool
+      checks for empty rule bodies.
+
+  - prompt: >-
+      A rule says apiGroups: ["*"], resources: ["*"], verbs: ["*"]. What does it
+      grant in a namespace?
+    options:
+      - Full access to every namespaced resource in that namespace
+      - Full access to the whole cluster
+      - Read access only
+      - Nothing, because wildcards are not allowed
+    answer: 0
+    why: >-
+      Full access to that namespace. It is not cluster-wide — that needs a
+      ClusterRoleBinding — but it is still a very large permission, and it includes
+      reading every Secret in the namespace.
+
+  - prompt: >-
+      What are the verbs in a rule?
+    options:
+      - The actions: get, list, watch, create, update, patch, delete
+      - The API groups
+      - The resource names
+      - The namespaces
+    answer: 0
+    why: >-
+      The actions on a set of resources. A rule names what you may *do* (verbs) to
+      which resources, in which API groups.
+
+  - prompt: >-
+      Can a Role grant access to nodes or persistent volumes?
+    options:
+      - No — those are cluster-scoped and need a ClusterRole
+      - Yes, if the Role is in the kube-system namespace
+      - Yes, with a wildcard resource
+      - Yes, if the node is labelled
+    answer: 0
+    why: >-
+      A namespaced Role cannot grant access to a cluster-scoped resource. The
+      permissions still need to come from a ClusterRole, even if the subject is a
+      namespaced ServiceAccount.
+
+  - prompt: >-
+      What are the built-in Roles Kubernetes ships with?
+    options:
+      - view, edit, admin and cluster-admin
+      - reader, writer, owner and root
+      - get, list, watch and delete
+      - default, system and kube
+    answer: 0
+    why: >-
+      `view`, `edit` and `admin` are namespace-scoped aggregates; `cluster-admin` is
+      the cluster-wide one. They are aggregates, so a role labelled for aggregation
+      joins them — which is a quiet way to widen them for everyone.
+
+  - prompt: >-
+      What happens when you create a Role with no RoleBinding?
+    options:
+      - Nothing — it grants no access to anyone
+      - It grants access to every ServiceAccount in the namespace
+      - It grants access to the default ServiceAccount only
+      - It is rejected
+    answer: 0
+    why: >-
+      A Role is a set of permissions with nobody attached. The binding is what gives
+      it effect, and the tool checks that both the role and the subject exist.

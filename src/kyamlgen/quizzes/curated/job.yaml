@@ -1,0 +1,90 @@
+kind: Job
+questions:
+  - prompt: >-
+      Which restartPolicy values are allowed in a Job's pod template?
+    options:
+      - Always and OnFailure
+      - Never and OnFailure
+      - Any value
+      - Never only
+    answer: 1
+    why: >-
+      A Job's pod must not restart forever, because the Job would never finish. The
+      API server rejects `Always`, which is the Pod default — so a Job has to state
+      `Never` or `OnFailure` explicitly.
+
+  - prompt: >-
+      What does backoffLimit control?
+    options:
+      - How many times a failed pod is retried before the Job is marked failed
+      - How many pods run at the same time
+      - How long the Job may run
+      - How many successful Jobs are kept for inspection
+    answer: 0
+    why: >-
+      The default is 6. A Job that keeps failing therefore takes a while to report
+      failure, which is why a CI pipeline waiting on a Job can look stuck for a long
+      time before it says anything.
+
+  - prompt: >-
+      You want the task to run 100 times, 10 at a time. What do you set?
+    options:
+      - "completions: 100 and parallelism: 10"
+      - "replicas: 100 and parallelism: 10"
+      - "backoffLimit: 100 and completions: 10"
+      - "completions: 10 and parallelism: 100"
+    answer: 0
+    why: >-
+      `completions` is how many must succeed in total; `parallelism` is how many run at
+      once. They are different axes and the common mistake is putting the numbers the
+      wrong way round.
+
+  - prompt: >-
+      A Job's pod completes successfully. What happens to the pod?
+    options:
+      - It is deleted immediately
+      - It stays, in the Completed phase, until the Job's history limit removes it
+      - It restarts
+      - It is converted into a Deployment
+    answer: 1
+    why: >-
+      A finished pod stays so you can read its logs. `ttlSecondsAfterFinished` cleans
+      it up on a timer, and the Job's own history limits keep the number of finished
+      Jobs in check.
+
+  - prompt: >-
+      What is ttlSecondsAfterFinished for?
+    options:
+      - How long the pod may run before it is killed
+      - How long a finished Job is kept before the API server removes it
+      - The timeout for a single container
+      - How long a failed Job is retried
+    answer: 1
+    why: >-
+      It is a timer on the finished Job. Without it, completed Jobs and their pods
+      accumulate until something else cleans them up.
+
+  - prompt: >-
+      A Job runs the same task again after it has already succeeded. How?
+    options:
+      - By deleting the Job and creating it again
+      - By changing the schedule
+      - By incrementing a generation number
+      - By adding a new label to the Job
+    answer: 0
+    why: >-
+      A Job's name is how the cluster knows it has already run. To run the same task
+      again, give it a new name — a timestamp suffix is the usual trick — because a
+      Job with an existing name is left alone.
+
+  - prompt: >-
+      When do you want a CronJob instead of a Job?
+    options:
+      - When the task must run on a schedule
+      - When the task must run in parallel
+      - When the task needs a Service
+      - When the task runs longer than an hour
+    answer: 0
+    why: >-
+      A CronJob creates Jobs on a schedule. Everything else about the task — parallelism,
+      backoff, the pod template — is written in a Job inside the CronJob's jobTemplate.

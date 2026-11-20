@@ -16,6 +16,7 @@ import yaml
 
 from . import __version__
 from .presets import curated_kinds, preset_for
+from .quizzes import quiz_for
 from .registry import describe
 from .render import parse_yaml, to_bundle_yaml, to_yaml
 from .schemas import (
@@ -65,6 +66,42 @@ def cmd_tree(args: argparse.Namespace) -> int:
     tree = WidgetBuilder(bundle).build(args.kind, args.api_version)
     json.dump(tree, sys.stdout, indent=2)
     sys.stdout.write("\n")
+    return 0
+
+
+def cmd_quiz(args: argparse.Namespace) -> int:
+    """Print the quiz for a kind: the questions, then the answer key."""
+    version = args.version or default_version()
+    api_version = args.api_version
+    if not api_version:
+        for ref in kind_index(version).values():
+            if ref.kind == args.kind:
+                api_version = ref.api_version
+                break
+    if not api_version:
+        print(f"error: unknown kind '{args.kind}'", file=sys.stderr)
+        return 2
+
+    questions = quiz_for(args.kind, api_version, version)
+    if not questions:
+        print(f"error: no quiz for kind '{args.kind}'", file=sys.stderr)
+        return 2
+
+    print(f"{args.kind} — {len(questions)} questions\n")
+    for index, question in enumerate(questions, start=1):
+        print(f"{index}. {question.prompt}")
+        for option_index, option in enumerate(question.options):
+            marker = "abcdefgh"[option_index]
+            print(f"   {marker}) {option}")
+        print()
+
+    print("=" * 60)
+    print("ANSWERS")
+    print("=" * 60)
+    for index, question in enumerate(questions, start=1):
+        marker = "abcdefgh"[question.answer]
+        print(f"{index}. {marker}) {question.options[question.answer]}")
+        print(f"   {question.why}\n")
     return 0
 
 
@@ -234,6 +271,12 @@ def build_parser() -> argparse.ArgumentParser:
     tutorial.add_argument("--api-version", default=None)
     tutorial.add_argument("--k8s-version", dest="version", default=None)
     tutorial.set_defaults(func=cmd_tutorial)
+
+    quiz = sub.add_parser("quiz", help="Print the quiz for a kind.")
+    quiz.add_argument("kind")
+    quiz.add_argument("--api-version", default=None)
+    quiz.add_argument("--k8s-version", dest="version", default=None)
+    quiz.set_defaults(func=cmd_quiz)
 
     validate = sub.add_parser("validate", help="Validate a YAML manifest.")
     validate.add_argument("path", nargs="?", default="-")

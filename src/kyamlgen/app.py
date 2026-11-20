@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .presets import curated_kinds, is_curated, preset_for
+from .quizzes import curated_for as curated_quiz_for
+from .quizzes import quiz_for, render_questions
 from .registry import describe
 from .render import parse_yaml, to_bundle_yaml
 from .schemas import (
@@ -148,6 +150,7 @@ def form(request: Request, apiVersion: str, kind: str, version: str | None = Non
 
     tree = _widget_tree(version, kind, api_version)
     info = next((item for item in candidates if item["apiVersion"] == api_version), candidates[0])
+    questions = quiz_for(kind, api_version, version)
     return templates.TemplateResponse(
         request,
         "form.html",
@@ -158,6 +161,9 @@ def form(request: Request, apiVersion: str, kind: str, version: str | None = Non
             "tree": _client_tree(tree),
             "preset": preset_for(kind),
             "tutorial": tutorial_for(kind, api_version, version),
+            "quiz_html": render_questions(questions),
+            "quiz_count": len(questions),
+            "quiz_curated": bool(curated_quiz_for(kind)),
             "info": {
                 "plural": info["plural"],
                 "namespaced": info["namespaced"],
@@ -180,6 +186,19 @@ def api_kinds(version: str | None = None) -> Any:
 def api_presets() -> Any:
     """The kinds that have a hand-written starting-point manifest."""
     return {"kinds": list(curated_kinds())}
+
+
+@app.get("/api/quiz")
+def api_quiz(apiVersion: str, kind: str, version: str | None = None) -> Any:
+    """The multiple-choice quiz for a kind."""
+    version = version or default_version()
+    questions = quiz_for(kind, apiVersion, version)
+    return {
+        "kind": kind,
+        "count": len(questions),
+        "curated": bool(curated_quiz_for(kind)),
+        "html": render_questions(questions),
+    }
 
 
 @app.get("/api/tutorial")

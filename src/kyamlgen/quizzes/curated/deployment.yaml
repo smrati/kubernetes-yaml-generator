@@ -1,0 +1,110 @@
+kind: Deployment
+questions:
+  - prompt: >-
+      A Deployment's spec.selector.matchLabels does not match the labels on its own
+      spec.template.metadata.labels. What happens?
+    options:
+      - The API server rejects the Deployment
+      - The Deployment is accepted and manages no pods at all
+      - The Deployment's existing pods are deleted
+      - The Deployment falls back to selecting pods by name
+    answer: 1
+    why: >-
+      The selector is how the Deployment says which Pods are its own. If it matches
+      nothing, the ReplicaSet it creates adopts no Pods — and the Pods it does create
+      still report as Running, because nothing is wrong with them. This is the
+      single most common Deployment bug, and no schema check catches it.
+
+  - prompt: >-
+      What does a Deployment actually create?
+    options:
+      - Pods, directly
+      - A ReplicaSet, which creates Pods
+      - A StatefulSet, which creates Pods
+      - A Job, which creates Pods
+    answer: 1
+    why: >-
+      A Deployment owns a ReplicaSet, which owns the Pods. The split lets the
+      Deployment decide *how* to replace Pods — gradually, with a history — while the
+      ReplicaSet just keeps *N* of them alive.
+
+  - prompt: >-
+      You set maxUnavailable: 0 and maxSurge: 1 on a Deployment with 3 replicas.
+      During a rollout, how many pods run at once?
+    options:
+      - 3
+      - 4
+      - 5
+      - It varies between 3 and 5
+    answer: 1
+    why: >-
+      maxUnavailable: 0 means never drop below the desired 3, and maxSurge: 1 means
+      run at most one extra. So the peak is 4 — the old Pod is only removed after the
+      new one is ready.
+
+  - prompt: >-
+      What is the relationship between a Deployment's replicas and its ReplicaSet's?
+    options:
+      - The Deployment sets the ReplicaSet's replicas, which creates the Pods
+      - The Deployment creates one ReplicaSet per replica
+      - They are independent and can disagree
+      - The ReplicaSet sets the Deployment's replicas
+    answer: 0
+    why: >-
+      The Deployment owns exactly one ReplicaSet and keeps its `replicas` in step with
+      the Deployment's. During a rollout there are briefly two ReplicaSets — the old
+      one scaled down, the new one scaled up.
+
+  - prompt: >-
+      You change a live Deployment's selector. What happens?
+    options:
+      - The Deployment updates and adopts or releases pods accordingly
+      - The change is rejected, because the selector is immutable
+      - The Deployment is deleted and recreated
+      - The pods are relabelled to match
+    answer: 1
+    why: >-
+      A Deployment's selector is immutable, for the same reason a ReplicaSet's is: it
+      is part of the object's identity, and changing it would mean the controller
+      suddenly adopting or abandoning Pods. Delete and recreate instead.
+
+  - prompt: >-
+      What does revisionHistoryLimit control?
+    options:
+      - How many old ReplicaSets are kept so a rollout can be rolled back
+      - How many pods may be unavailable during a rollout
+      - How many times a pod may be restarted
+      - How long a completed revision is kept
+    answer: 0
+    why: >-
+      It is the number of old ReplicaSets kept around for `kubectl rollout undo`. The
+      default is 10, which is usually more than you need and not free — each retained
+      ReplicaSet keeps its revision's ReplicaSet manifest.
+
+  - prompt: >-
+      When is a StatefulSet the right choice over a Deployment?
+    options:
+      - Whenever the workload is important
+      - When pods need stable identities or per-replica storage
+      - When you need more than one replica
+      - When you need rolling updates
+    answer: 1
+    why: >-
+      A StatefulSet costs you ordered startup, ordered shutdown, and per-replica
+      storage. If your application does not care which replica it is, that is all
+      cost and no benefit — use a Deployment.
+
+  - prompt: >-
+      What is the difference between a Deployment's rolling update and a StatefulSet's
+      rolling update?
+    options:
+      - None — they behave identically
+      - The StatefulSet updates pods in reverse ordinal order, one at a time
+      - The StatefulSet updates all pods at once
+      - The Deployment updates pods in reverse ordinal order
+    answer: 1
+    why: >-
+      A StatefulSet deletes and recreates its Pods from the highest ordinal down, one
+      at a time, waiting for each to become Ready. It is deliberately conservative —
+      a database replica that goes down is not necessarily ready to come straight
+      back.

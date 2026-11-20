@@ -1,0 +1,91 @@
+kind: PersistentVolumeClaim
+questions:
+  - prompt: >-
+      A PVC requests 10Gi. How much storage does it get?
+    options:
+      - Exactly 10Gi
+      - At least 10Gi, possibly more if the bound PV is larger
+      - Whatever the StorageClass's default size is
+      - Whatever is free on the node
+    answer: 1
+    why: >-
+      A claim that asks for 10Gi can be bound to a 100Gi volume and gets all of it.
+      The request is a floor, which is why a storage class with a generous default
+      size costs more than the request suggests.
+
+  - prompt: >-
+      accessModes: ReadWriteOnce means the volume can be mounted read-write by...
+    options:
+      - One node
+      - One pod
+      - One node, by any number of pods on that node
+      - One container
+    answer: 0
+    why: >-
+      One *node*. Several pods on that node can mount it, and one pod can mount it
+      from several nodes — but not both at once. This is why a Deployment with two
+      replicas on different nodes cannot use a ReadWriteOnce volume.
+
+  - prompt: >-
+      A PVC stays in Pending. What is the most likely cause?
+    options:
+      - The StorageClass's provisioner cannot deliver in this region
+      - The claim has no namespace
+      - The claim's name is too long
+      - The claim needs a selector
+    answer: 0
+    why: >-
+      `kubectl describe pvc` names the provisioner and its error. The usual cause is
+      a storage class that cannot actually provision where the cluster is — a zone
+      with no volumes, for instance.
+
+  - prompt: >-
+      What does spec.storageClassName do?
+    options:
+      - Says which class of storage the claim wants
+      - Names the node the volume lives on
+      - Sets the access mode
+      - Selects the PV to bind
+    answer: 0
+    why: >-
+      It picks the class. Omit it and the cluster's default class is used — which is
+      convenient and is also how a volume ends up on expensive storage by accident.
+
+  - prompt: >-
+      You delete a PVC. What happens to the storage?
+    options:
+      - It depends on the StorageClass's reclaimPolicy
+      - It is always deleted
+      - It is always kept
+      - It is rebound to another claim
+    answer: 0
+    why: >-
+      `Delete` destroys it, `Retain` keeps it and leaves the PV in `Released` for
+      an administrator. The cloud default is usually `Delete`, so deleting a claim
+      usually deletes the disk — and its snapshots, if you did not make any.
+
+  - prompt: >-
+      What does a PVC's spec.resources.requests.storage field mean?
+    options:
+      - The exact amount of storage requested
+      - The minimum CPU the volume needs
+      - The number of replicas that may mount it
+      - The IOPS the volume must deliver
+    answer: 0
+    why: >-
+      It is the amount of storage, and it is the only required field in the spec. It
+      is called `requests` because the field is shared with resource requests
+      generally, but for storage it behaves like a fixed size.
+
+  - prompt: >-
+      A Deployment has two replicas and mounts a ReadWriteOnce PVC. What happens?
+    options:
+      - Both replicas mount it, if they land on the same node
+      - The second replica stays Pending waiting for a mount
+      - Both mount it read-only
+      - The volume is resized to fit
+    answer: 1
+    why: >-
+      A ReadWriteOnce volume can be mounted by one node at a time. If the two
+      replicas land on different nodes, the second cannot mount it and stays
+      Pending with a mount error.

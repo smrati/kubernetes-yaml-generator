@@ -1,0 +1,78 @@
+kind: ConfigMap
+questions:
+  - prompt: >-
+      A ConfigMap holds a database password. What is wrong with that?
+    options:
+      - Nothing — a ConfigMap is the right place for any configuration
+      - ConfigMap values are plain text and readable by anyone who can read the object
+      - A ConfigMap cannot hold more than ten keys
+      - A ConfigMap cannot be mounted as a volume
+    answer: 1
+    why: >-
+      A ConfigMap is not a secret store. Its values are plain text, printed by
+      `kubectl get configmap -o yaml`, and readable by anyone with read access.
+      Credentials belong in a Secret.
+
+  - prompt: >-
+      A pod reads a ConfigMap with envFrom. What happens when the ConfigMap's value
+      changes?
+    options:
+      - The environment variable updates within seconds
+      - The pod's environment keeps the old value until the pod restarts
+      - The pod is restarted automatically
+      - The pod crashes
+    answer: 1
+    why: >-
+      Environment variables are fixed when the container starts. A ConfigMap mounted
+      as a volume does update in place, but the application has to notice and
+      re-read it — the kubelet does not restart anything for you.
+
+  - prompt: >-
+      What is the difference between envFrom and env for reading a ConfigMap?
+    options:
+      - envFrom pulls every key in as an environment variable; env names one key
+      - envFrom is for volumes; env is for environment variables
+      - envFrom is deprecated
+      - They are interchangeable
+    answer: 0
+    why: >-
+      `envFrom` takes every key, which is convenient and quietly skips any key that
+      is not a valid environment variable name. `env` with a `configMapKeyRef` names
+      the key explicitly and fails loudly if it is missing.
+
+  - prompt: >-
+      Where can a ConfigMap's data keys contain characters like a dot?
+    options:
+      - Nowhere — keys must be alphanumeric
+      - In the data field, yes, though not in the binaryData field
+      - Only in the binaryData field
+      - Only when using envFrom
+    answer: 1
+    why: >-
+      ConfigMap keys may contain dots, dashes and underscores. The restriction on
+      those characters is on environment variable *names*, which is exactly why
+      `envFrom` silently skips a key like `app.kubernetes.io/name`.
+
+  - prompt: >-
+      What does a ConfigMap's immutable field do?
+    options:
+      - Encrypts the values
+      - Stops the data being changed after creation
+      - Makes the values available on every node
+      - Hides the values from `kubectl describe`
+    answer: 1
+    why: >-
+      An immutable ConfigMap cannot be changed, which is a cheap guarantee that
+      something mounted from it will not shift under the application.
+
+  - prompt: >-
+      A ConfigMap in namespace `staging` — can a pod in `production` read it?
+    options:
+      - Yes, if the pod has permission
+      - No — a ConfigMap is namespaced and only reachable from its own namespace
+      - Yes, if it is mounted as a volume
+      - Only if it has the same name in both namespaces
+    answer: 1
+    why: >-
+      A ConfigMap lives in a namespace, and a pod can only mount references from its
+      own namespace. Copying it across is deliberate work, not an accident.

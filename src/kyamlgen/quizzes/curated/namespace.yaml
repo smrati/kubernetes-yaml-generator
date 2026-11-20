@@ -1,0 +1,91 @@
+kind: Namespace
+questions:
+  - prompt: >-
+      Does a Namespace isolate one workload's network from another's?
+    options:
+      - Yes, namespaces are network boundaries
+      - No — network isolation is a NetworkPolicy's job
+      - Yes, but only on some CNI plugins
+      - Yes, for pods in different namespaces
+    answer: 1
+    why: >-
+      A namespace is a naming and policy boundary. Every pod in the cluster can
+      usually reach every other pod by IP unless a NetworkPolicy says otherwise. Two
+      namespaces on the same node are no more isolated than two pods in one.
+
+  - prompt: >-
+      What is a namespace the unit of, in RBAC?
+    options:
+      - Role and RoleBinding are namespaced; ClusterRoleBinding is not
+      - Everything is namespaced
+      - Only RoleBinding is namespaced
+      - RBAC does not use namespaces
+    answer: 0
+    why: >-
+      A Role names permissions in one namespace, and a RoleBinding grants them in
+      one namespace. A ClusterRole can be bound either way — which is how "read
+      every pod everywhere" and "read pods in one namespace" can use the same role.
+
+  - prompt: >-
+      You delete a namespace. What happens?
+    options:
+      - Everything in it is deleted, asynchronously, with no undo
+      - Only the namespace object is deleted, and its contents are orphaned
+      - The deletion is refused if the namespace is not empty
+      - The contents move to the default namespace
+    answer: 0
+    why: >-
+      Deleting a namespace deletes everything in it. The deletion runs in the
+      background, and a namespace stuck in Terminating usually means something inside
+      it has a finalizer that will not clear.
+
+  - prompt: >-
+      An object has no metadata.namespace. Where does it go?
+    options:
+      - To the default namespace
+      - To the kube-system namespace
+      - It is rejected
+      - To whichever namespace the current kubectl context points at
+    answer: 0
+    why: >-
+      To `default`. It is not the current context's namespace — that only applies to
+      `kubectl` commands that create objects for you. Objects you apply yourself
+      need an explicit namespace, which is how a namespace boundary quietly leaks.
+
+  - prompt: >-
+      What is a ResourceQuota measured in?
+    options:
+      - Per namespace
+      - Per node
+      - Per user
+      - Cluster-wide
+    answer: 0
+    why: >-
+      Per namespace. A quota caps the total resources the objects in one namespace
+      may consume — which is why it is also the unit of billing and of team ownership.
+
+  - prompt: >-
+      What is the difference between a namespace and a label?
+    options:
+      - A namespace is a boundary for names and policy; a label is a key-value tag for selecting
+      - They are interchangeable
+      - A namespace is cluster-scoped; a label is namespaced
+      - A label is for humans; a namespace is for machines
+    answer: 0
+    why: >-
+      A namespace partitions names, permissions and quotas. A label selects objects —
+      it is how a Service finds pods and how a Deployment finds its own. They are
+      orthogonal, and most real clusters use both.
+
+  - prompt: >-
+      Which of these lives inside a namespace?
+    options:
+      - A Pod, a Service and a ConfigMap
+      - A Node and a PersistentVolume
+      - A Namespace and a Node
+      - A ClusterRole and a StorageClass
+    answer: 0
+    why: >-
+      Pods, Services, ConfigMaps, Secrets, PVCs, Deployments and RBAC Roles are all
+      namespaced. Nodes, PersistentVolumes, StorageClasses, ClusterRoles and
+      Namespaces themselves are cluster-scoped.

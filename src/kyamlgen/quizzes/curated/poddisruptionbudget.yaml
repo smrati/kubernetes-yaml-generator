@@ -1,0 +1,94 @@
+kind: PodDisruptionBudget
+questions:
+  - prompt: >-
+      What does a PodDisruptionBudget govern?
+    options:
+      - Voluntary disruption — evictions, node drains, cluster upgrades
+      - All disruption, including a node failing
+      - The total number of pods in a workload
+      - Which nodes pods may run on
+    answer: 0
+    why: >-
+      Only the eviction API. If a node dies, its pods go with it whatever the budget
+      says. A PDB protects against maintenance you schedule, not against failure.
+
+  - prompt: >-
+      What happens when a node drain cannot evict a pod without breaking the budget?
+    options:
+      - The pod is evicted anyway
+      - The eviction is refused and the drain stalls
+      - The budget is raised automatically
+      - The pod is rescheduled first
+    answer: 1
+    why: >-
+      The eviction is refused and the drain blocks. That is the budget doing its job,
+      and it is also why a PDB with `minAvailable` equal to the replica count can
+      wedge a cluster upgrade.
+
+  - prompt: >-
+      Can you set both minAvailable and maxUnavailable on a PodDisruptionBudget?
+    options:
+      - Yes, and the more permissive one wins
+      - No — they are alternatives, and setting both is rejected
+      - Yes, and minAvailable wins
+      - Yes, and maxUnavailable wins
+    answer: 1
+    why: >-
+      They are alternatives and setting both is rejected. `minAvailable` is a floor
+      on how many stay up; `maxUnavailable` is a ceiling on how many may go down.
+      Pick whichever expresses your intent more directly.
+
+  - prompt: >-
+      A PDB's selector matches no pods. What does it do?
+    options:
+      - Nothing — it protects no pods and allows every eviction
+      - It blocks all evictions in the namespace
+      - It is rejected
+      - It selects every pod in the namespace
+    answer: 0
+    why: >-
+      It matches no pods, so it protects none — and allows every eviction. The
+      danger is that it looks like it is protecting something. A PDB whose selector
+      does not match the workload's pod template labels is a no-op that reads like a
+      safety net.
+
+  - prompt: >-
+      A Deployment has one replica and a PDB with minAvailable: 1. What happens
+      during a node drain?
+    options:
+      - The pod is evicted and a new one is created elsewhere
+      - The drain stalls until the pod is manually deleted
+      - The PDB is ignored for single-replica workloads
+      - The pod is evicted with force
+    answer: 1
+    why: >-
+      The budget says one pod must stay up, so no eviction is allowed at all. It is
+      correct behaviour and it is also a common reason a cluster upgrade hangs
+      forever.
+
+  - prompt: >-
+      Which is the more useful setting for a five-replica deployment?
+    options:
+      - maxUnavailable: 1, so one pod may be disrupted at a time
+      - minAvailable: 5, so nothing may ever be disrupted
+      - minAvailable: 1, so at least one pod must always be up
+      - Both, so the limits combine
+    answer: 0
+    why: >-
+      `maxUnavailable: 1` expresses the intent — one pod at a time — without
+      wedging the drain when a pod is already unhealthy. `minAvailable` counts
+      healthy pods, which can block a drain for reasons that have nothing to do with
+      the budget.
+
+  - prompt: >-
+      Which component enforces a PodDisruptionBudget?
+    options:
+      - The API server, in the eviction endpoint
+      - The scheduler
+      - The kubelet
+      - kube-proxy
+    answer: 0
+    why: >-
+      The eviction endpoint. Anything that evicts pods — a drain, `kubectl drain`, an
+      autoscaler, a cluster upgrade — goes through it, and the API server refuses
+      evictions that would break a budget.

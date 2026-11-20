@@ -35,10 +35,11 @@ FastAPI
  ├── form engine       schema -> widget tree
  ├── presets           hand-written starting-point manifests
  ├── tutorials         hand-written tutorials + the derived ones
+ ├── quizzes           hand-written quizzes + the derived ones
  ├── semantic engine   coupling rules · reference checks · advisories
  ├── validator         form-time -> JSON Schema (strict) -> semantic
  ├── renderer          dict -> ordered YAML -> multi-document bundle
- └── CLI               serve · kinds · presets · preset · tutorial · tree · generate · validate
+ └── CLI               serve · kinds · presets · preset · tutorial · quiz · tree · generate · validate
 ```
 
 Validation runs in four layers, because each catches a different class of error:
@@ -92,6 +93,21 @@ uv run kyamlgen preset Deployment              # print one
 uv run kyamlgen generate Deployment --api-version apps/v1 --preset
 ```
 
+## Quizzes
+
+Every kind opens with a self-test. **Twenty-nine kinds have a hand-written quiz** of
+six to eight questions — 206 in total — and every question targets a misconception
+or a silent failure rather than a field name. The other kinds get a derived quiz of
+one to three questions, so no kind opens with nothing.
+
+Choosing an option reveals the answer and the explanation immediately; a wrong pick
+also marks the right one. Options are shuffled, so the answer is not always in the
+same place.
+
+```bash
+uv run kyamlgen quiz Deployment   # the questions, then the answer key
+```
+
 ## From the command line
 
 ```bash
@@ -104,16 +120,16 @@ uv run kyamlgen validate manifest.yaml
 ## Tests
 
 ```bash
-uv run pytest        # 211 Python tests, plus the 19 JavaScript tests they wrap
+uv run pytest        # 336 Python tests, plus the 19 JavaScript tests they wrap
 ```
 
 The suite covers the schema service, the widget engine (including a test that walks
 *every* kind in the bundle), all four validation layers, the YAML renderer, every
-template, every tutorial's links, and the HTTP API end to end.
+template, every tutorial's links, every quiz, and the HTTP API end to end.
 
 ## Status
 
-See `architecture.md` §15 for the honest status table and §16 for the open
+See `architecture.md` §16 for the honest status table and §17 for the open
 questions. `INTENT.md` is the append-only decision log explaining *why* each choice
 was made.
 

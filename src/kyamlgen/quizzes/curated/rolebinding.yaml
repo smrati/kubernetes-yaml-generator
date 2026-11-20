@@ -1,0 +1,93 @@
+kind: RoleBinding
+questions:
+  - prompt: >-
+      What does a RoleBinding bring together?
+    options:
+      - A subject, a role reference, and a namespace
+      - A subject and a namespace
+      - A role and a cluster
+      - A pod and a ServiceAccount
+    answer: 0
+    why: >-
+      Who (subject), what (roleRef) and where (its own namespace). It is the only
+      object that actually grants access.
+
+  - prompt: >-
+      Can you change the roleRef of an existing RoleBinding?
+    options:
+      - No — it is immutable; delete and recreate the binding
+      - Yes, and the change takes effect immediately
+      - Yes, but only if the new role is in the same namespace
+      - Yes, if you also update the subject
+    answer: 0
+    why: >-
+      The roleRef is immutable, because it is part of the binding's identity —
+      changing it would silently repoint who holds which permissions. The fix is to
+      delete the binding and create a new one.
+
+  - prompt: >-
+      A RoleBinding in namespace `app` references a Role named `reader` in namespace
+      `other`. Does that work?
+    options:
+      - No — a RoleBinding can only reference a Role in its own namespace
+      - Yes, if the role names exist
+      - Yes, if the ServiceAccount is in `app`
+      - Only if the roles have the same name
+    answer: 0
+    why: >-
+      The roleRef has no namespace in it, so it resolves in the binding's own
+      namespace. To grant a namespaced Role across namespaces you bind a
+      ClusterRole instead.
+
+  - prompt: >-
+      Where does a subject's namespace come from in a RoleBinding?
+    options:
+      - From subjects[].namespace, inside the binding
+      - From the binding's own metadata.namespace
+      - From the subject's name
+      - From the role's namespace
+    answer: 0
+    why: >-
+      It is in `subjects[].namespace`, not the binding's. So a binding in `app` can
+      grant to a ServiceAccount in `other` — the binding is still scoped to `app`.
+
+  - prompt: >-
+      A RoleBinding names a Role that does not exist. What happens?
+    options:
+      - The API server rejects it
+      - It is accepted and grants nothing until the Role appears
+      - It grants the default permissions
+      - It is deleted
+    answer: 1
+    why: >-
+      Accepted, and granting nothing. The reference is just a name, so there is
+      nothing to validate — and the symptom is a "forbidden" that nobody can explain.
+      This is why the tool checks that the role exists.
+
+  - prompt: >-
+      Can a RoleBinding in namespace `app` grant a ClusterRole's permissions?
+    options:
+      - Yes — but only inside `app`
+      - No, only a ClusterRoleBinding can grant a ClusterRole
+      - Yes, cluster-wide
+      - Only if the ClusterRole is namespace-scoped
+    answer: 0
+    why: >-
+      Yes, and the binding's namespace is the limit. This is the useful middle
+      ground: the same ClusterRole can be cluster-wide through one binding and
+      confined to a namespace through another.
+
+  - prompt: >-
+      What is the difference between a RoleBinding and a ClusterRoleBinding?
+    options:
+      - A RoleBinding grants within its namespace; a ClusterRoleBinding grants
+        cluster-wide
+      - A RoleBinding can only bind Roles; a ClusterRoleBinding can only bind
+        ClusterRoles
+      - A RoleBinding is for users; a ClusterRoleBinding is for ServiceAccounts
+      - A RoleBinding is cluster-scoped; a ClusterRoleBinding is namespaced
+    answer: 0
+    why: >-
+      The scope of the grant. The same ClusterRole bound two ways gives two very
+      different permissions, and the manifests look almost identical — which is the
+      whole security boundary.

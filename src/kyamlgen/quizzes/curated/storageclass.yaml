@@ -1,0 +1,90 @@
+kind: StorageClass
+questions:
+  - prompt: >-
+      What does a StorageClass describe?
+    options:
+      - A kind of storage: how to provision it, and what happens when it is deleted
+      - A specific volume
+      - A request for storage
+      - The node a volume lives on
+    answer: 0
+    why: >-
+      A StorageClass is a description of a *kind* of storage. A claim names a class
+      to ask for that kind; a volume is one instance of it.
+
+  - prompt: >-
+      What does reclaimPolicy decide?
+    options:
+      - What happens to the underlying storage when the claim is deleted
+      - How fast the volume is provisioned
+      - Whether the volume can be resized
+      - Which nodes the volume may be used on
+    answer: 0
+    why: >-
+      `Delete` destroys the storage, `Retain` keeps it and leaves the volume in
+      `Released`. The cloud default is usually `Delete`, so a deleted claim usually
+      means a deleted disk.
+
+  - prompt: >-
+      What does volumeBindingMode: WaitForFirstConsumer change?
+    options:
+      - The volume is provisioned when a pod needs it, so it lands in the right zone
+      - The volume is provisioned in the first available zone
+      - The claim waits for the pod to be scheduled before it is bound
+      - The volume is provisioned in parallel with the pod
+    answer: 0
+    why: >-
+      Provisioning waits for a pod, so the scheduler can pick a node first and the
+      volume can follow it into the right zone. `Immediate` provisions up front in
+      whatever zone is free, which can put your pod and its data in different places.
+
+  - prompt: >-
+      A PVC has no storageClassName. Which class is used?
+    options:
+      - No class — the claim stays Pending
+      - The cluster's default StorageClass
+      - The newest StorageClass
+      - The class named after the claim
+    answer: 1
+    why: >-
+      The cluster's default. This is convenient, and it is also how a claim quietly
+      lands on expensive storage because someone set the default to the fast tier.
+
+  - prompt: >-
+      What does allowVolumeExpansion enable?
+    options:
+      - Growing a bound volume by patching the claim
+      - Shrinking a volume
+      - Moving a volume between nodes
+      - Snapshotting a volume
+    answer: 0
+    why: >-
+      It lets you raise the claim's request and have the volume grow. It is often
+      off, and growing a database's disk then means migrating it instead.
+
+  - prompt: >-
+      Which field names the provisioner that creates the volumes?
+    options:
+      - provisioner
+      - provisionerClass
+      - backend
+      - driverName
+    answer: 0
+    why: >-
+      `provisioner` is the name of the controller that creates volumes of this class —
+      `kubernetes.io/aws-ebs`, for instance. `volumeBindingMode` and
+      `parameters` say how it should do it.
+
+  - prompt: >-
+      What happens when you delete a StorageClass?
+    options:
+      - Existing volumes keep working; new claims can no longer use it
+      - All its volumes are deleted
+      - The class is recreated automatically
+      - Its default flag moves to another class
+    answer: 0
+    why: >-
+      Deleting a class does not touch the volumes already provisioned from it, but
+      claims that name it stop being satisfiable. In managed clusters the class is
+      usually recreated with the same name, which is why a deleted default class
+      sometimes appears to come back.

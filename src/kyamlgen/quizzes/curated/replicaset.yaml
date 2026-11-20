@@ -1,0 +1,94 @@
+kind: ReplicaSet
+questions:
+  - prompt: >-
+      What does a ReplicaSet do that a Deployment does not?
+    options:
+      - Nothing — a ReplicaSet is the older, less capable version
+      - It keeps a stated number of pods running with matching labels
+      - It rolls pods out gradually
+      - It scales pods based on CPU
+    answer: 1
+    why: >-
+      The ReplicaSet's job is exactly one thing: keep N Pods with matching labels
+      alive. The rolling update and the revision history are the Deployment's job,
+      layered on top.
+
+  - prompt: >-
+      Who creates a ReplicaSet in practice?
+    options:
+      - A Deployment, which owns it
+      - A StatefulSet, which owns it
+      - The scheduler
+      - The kubelet
+    answer: 0
+    why: >-
+      A Deployment owns exactly one ReplicaSet and keeps its replica count in step.
+      A StatefulSet uses a controller of its own instead. Nobody hand-writes a
+      ReplicaSet in a normal cluster.
+
+  - prompt: >-
+      Why is a ReplicaSet's spec.selector immutable?
+    options:
+      - Because changing it would make the controller adopt or abandon pods
+      - Because the API server cannot compare two selectors
+      - Because the pods' labels are set from it
+      - Because a ReplicaSet's selector cannot use matchExpressions
+    answer: 0
+    why: >-
+      The selector is part of the object's identity: it says which Pods this
+      ReplicaSet owns. Changing it would make the controller suddenly adopt Pods
+      belonging to someone else, or abandon its own.
+
+  - prompt: >-
+      What can matchExpressions do that matchLabels cannot?
+    options:
+      - Match on values other than equality, such as "exists" or "in"
+      - Match on the namespace
+      - Match on the container image
+      - Match pods by name
+    answer: 0
+    why: >-
+      matchLabels is equality only. matchExpressions adds operators like In, NotIn,
+      Exists and DoesNotExist, which is how you select "any pod labelled
+      `role=worker`, whatever its version".
+
+  - prompt: >-
+      Two controllers select the same pods. What happens?
+    options:
+      - The second controller adopts them and the first reports a conflict
+      - Both manage them and fight over their replicas
+      - The API server rejects the second controller
+      - The pods are deleted
+    answer: 0
+    why: >-
+      Controllers refuse to adopt a Pod that another controller already owns, and
+      they surface an `OwnedByAnotherController` event. It is a loud failure rather
+      than a silent fight — which is a good thing, because the silent version is
+      much harder to debug.
+
+  - prompt: >-
+      A Deployment creates a ReplicaSet whose selector matches nothing. What is the
+      symptom?
+    options:
+      - The Deployment reports zero available replicas
+      - The Deployment is rejected
+      - The pods run but are not addressable by a Service
+      - The ReplicaSet is deleted and recreated
+    answer: 0
+    why: >-
+      The Deployment reports zero replicas because the ReplicaSet it created adopts
+      no Pods. The pods themselves may well be running and healthy — they are just
+      not the Deployment's.
+
+  - prompt: >-
+      When is a ReplicaSet the right object to write yourself?
+    options:
+      - Almost never — a Deployment gives you the same thing with rollouts
+      - When you want pods kept alive with no rollout behaviour at all
+      - When you want to scale on CPU
+      - When you want stable pod names
+    answer: 1
+    why: >-
+      Writing a ReplicaSet directly is a deliberate choice to get the pod-keeping
+      without the rolling update. It is rare, but it is the one thing a ReplicaSet
+      does that a Deployment does not.

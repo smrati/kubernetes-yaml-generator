@@ -64,6 +64,28 @@
       </details>
     {% endif %}
 
+    {% if quiz_count %}
+      <details class="quiz-panel" id="quiz-panel">
+        <summary>
+          <span class="tutorial-title">Check yourself</span>
+          <span class="tutorial-summary">
+            {% if quiz_count == 1 %}1 question{% else %}{{ quiz_count }} questions{% endif %}
+            {%- if not quiz_curated %} on {{ kind }}{% endif %}
+          </span>
+        </summary>
+        <div class="quiz-body">
+          <div class="quiz" id="quiz">
+            <div class="quiz-progress" data-progress>0 of {{ quiz_count }} answered</div>
+            {{ quiz_html | safe }}
+            <div class="quiz-summary" data-summary hidden></div>
+            <button type="button" class="btn btn-ghost quiz-reset" data-reset hidden>
+              Try again
+            </button>
+          </div>
+        </div>
+      </details>
+    {% endif %}
+
     <div id="objects" class="objects"></div>
     <div class="objects-add">
       <select id="add-kind" class="select"></select>
@@ -95,5 +117,6 @@
   };
 </script>
 <script src="/static/formstate.js"></script>
+<script src="/static/quiz.js"></script>
 <script src="/static/app.js"></script>
 {% endblock %}

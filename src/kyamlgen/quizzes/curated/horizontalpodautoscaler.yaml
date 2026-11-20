@@ -1,0 +1,103 @@
+kind: HorizontalPodAutoscaler
+questions:
+  - prompt: >-
+      What does a HorizontalPodAutoscaler actually change?
+    options:
+      - The replicas field of the workload it targets
+      - The number of nodes in the cluster
+      - The resource requests of the pods
+      - The Service's cluster IP
+    answer: 0
+    why: >-
+      It asks a Deployment, StatefulSet or ReplicaSet to have more or fewer pods. It
+      does not create pods itself, and it does not add nodes — that is the cluster
+      autoscaler's job.
+
+  - prompt: >-
+      Which workload can an HPA target?
+    options:
+      - Only a Deployment
+      - A Deployment, a StatefulSet or a ReplicaSet
+      - Any workload, including a DaemonSet or a Job
+      - A Pod
+    answer: 1
+    why: >-
+      Anything that implements the `scale` subresource. A DaemonSet and a Job have no
+      replica count to scale, so they are not targets.
+
+  - prompt: >-
+      An HPA's CPU target is averageUtilization: 80. What is 80% of?
+    options:
+      - The node's total CPU
+      - The container's CPU request
+      - The container's CPU limit
+      - The pod's CPU usage over its whole lifetime
+    answer: 1
+    why: >-
+      The request. That is why a CPU-based HPA needs `resources.requests` to be set
+      sensibly: without a request, there is no baseline to be a percentage of, and
+      the HPA has nothing to work from.
+
+  - prompt: >-
+      A container has no CPU request and an HPA targets it on CPU. What happens?
+    options:
+      - The HPA scales on the node's total CPU
+      - The HPA cannot compute a utilisation and reports an error condition
+      - The HPA treats it as 100% and scales to the maximum
+      - The HPA is rejected
+    answer: 1
+    why: >-
+      The HPA reports `FailedGetResourceMetric` and does nothing. This is a common
+      surprise: the HPA is accepted, the Deployment looks fine, and nothing scales.
+
+  - prompt: >-
+      What is the default value of minReplicas?
+    options:
+      - 1
+      - 2
+      - The Deployment's current replica count
+      - 0
+    answer: 0
+    why: >-
+      One. Setting it explicitly to 2 is common for production, because it means the
+      HPA will not scale a service all the way down to a single pod.
+
+  - prompt: >-
+      Why does the HPA scale down more slowly than it scales up?
+    options:
+      - There is a stabilisation window, because a scale-down during a spike is
+        much worse than a slow scale-up
+      - The metrics arrive more slowly for falling load
+      - Scale-down is disabled by default
+      - The API server throttles scale-down
+    answer: 0
+    why: >-
+      There is a five-minute stabilisation window by default in each direction. It
+      is deliberate: a pod killed during a traffic spike is a pod that has to be
+      replaced and warmed up again.
+
+  - prompt: >-
+      An HPA targets a Deployment that does not exist. What happens?
+    options:
+      - The HPA is rejected
+      - The HPA is accepted and reports an error condition
+      - The HPA creates the Deployment
+      - The HPA scales to zero
+    answer: 1
+    why: >-
+      The reference is a name, so the API server has nothing to object to. The HPA
+      reports `FailedGetScale` in its conditions and does nothing — which is why
+      the tool checks that an HPA's target is in the bundle.
+
+  - prompt: >-
+      Can an HPA scale a StatefulSet that has per-replica storage?
+    options:
+      - Yes, and it is safe
+      - Technically yes, but scaling down cannot move the data, so it is usually wrong
+      - No, it is rejected
+      - Only up, never down
+    answer: 1
+    why: >-
+      The HPA will do it, because the StatefulSet implements the scale subresource.
+      But scaling down discards a replica and its volume, so the data is not
+      redistributed — which is why stateful workloads are usually left alone.

@@ -1,0 +1,91 @@
+kind: CronJob
+questions:
+  - prompt: >-
+      What time does the schedule "0 3 * * *" fire?
+    options:
+      - 03:00 in the cluster's local time
+      - 03:00 UTC
+      - 03:00 in the time zone of the node running the controller
+      - 03:00 in your laptop's time zone
+    answer: 1
+    why: >-
+      Cron schedules are UTC unless you say otherwise. A nightly job at "03:00" runs
+      at 08:30 in Mumbai — which is the kind of surprise that gets a job run in the
+      middle of the working day.
+
+  - prompt: >-
+      What does the concurrencyPolicy field control?
+    options:
+      - How many CronJobs may exist in a namespace
+      - What happens when a scheduled run starts while the previous one is still running
+      - The number of parallel pods inside each Job
+      - How far behind schedule the CronJob may drift
+    answer: 1
+    why: >-
+      The default is `Allow`, which starts a new run even if the last has not
+      finished. For a job that is not safe to run twice at once, set it to `Forbid`.
+
+  - prompt: >-
+      What is startingDeadlineSeconds for?
+    options:
+      - How long a pod may run before it is killed
+      - How late a missed run may start and still count
+      - How long the CronJob keeps its history
+      - The timeout for the whole schedule
+    answer: 1
+    why: >-
+      If the controller was down when a run was due, this is how long after the fact
+      it may still start. Past that window the run is skipped and counted as missed —
+      which is usually what you want, rather than a thundering herd on recovery.
+
+  - prompt: >-
+      Where do you put the pod template in a CronJob?
+    options:
+      - spec.template
+      - spec.jobTemplate.spec.template
+      - spec.jobTemplate.template
+      - spec.podTemplate
+    answer: 1
+    why: >-
+      A CronJob creates Jobs, so the pod template lives inside a Job spec inside
+      jobTemplate. That extra level is why the path looks unfamiliar the first time.
+
+  - prompt: >-
+      What is the difference between successfulJobsHistoryLimit and
+      failedJobsHistoryLimit?
+    options:
+      - One is for Jobs in the current namespace, the other for other namespaces
+      - How many succeeded and how many failed Jobs are kept for inspection
+      - How many jobs may run and how many may be queued
+      - The timeout for each of them
+    answer: 1
+    why: >-
+      They control how many finished Jobs are retained. The defaults are 3 and 1, which
+      is usually enough to see what happened and not enough to fill up etcd.
+
+  - prompt: >-
+      A CronJob's schedule fires every hour. The job takes 90 minutes. What happens by
+      default?
+    options:
+      - The next run is skipped
+      - A second Job starts while the first is still running
+      - The first Job is killed
+      - The schedule is rejected
+    answer: 1
+    why: >-
+      The default `concurrencyPolicy: Allow` starts the next run anyway. Two
+      overlapping runs of a job that was not written to tolerate that is a common
+      source of duplicate work.
+
+  - prompt: >-
+      What does timeZone do?
+    options:
+      - Shifts the schedule so it fires in that zone
+      - Changes the time zone of the pods the CronJob creates
+      - Changes the time zone of the cluster
+      - Labels the pods with a time zone
+    answer: 0
+    why: >-
+      It shifts the interpretation of the schedule. It does not change the pods' clock
+      — which remains UTC, and is usually what you want, because everything else in
+      the cluster logs in UTC.

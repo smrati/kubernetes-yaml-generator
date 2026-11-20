@@ -1,0 +1,92 @@
+kind: LimitRange
+questions:
+  - prompt: >-
+      What does a LimitRange do?
+    options:
+      - Supplies default resource values and caps what containers may request
+      - Caps the namespace's total resources
+      - Restricts which nodes pods may run on
+      - Sets the default image for the namespace
+    answer: 0
+    why: >-
+      It fills in what was left unset and rejects what is too large. The namespace
+      total is a ResourceQuota's job; this is about the individual container.
+
+  - prompt: >-
+      A container sets no memory limit. What does the LimitRange's default limit do?
+    options:
+      - Applies — the container gets that limit
+      - Nothing, because a default only applies when the field is absent at admission
+      - The container is rejected
+      - The limit is raised to the default
+    answer: 1
+    why: >-
+      The default applies because the field *was* absent, so the container does get
+      the limit. What a default never does is override a value that was set
+      explicitly.
+
+  - prompt: >-
+      A LimitRange sets a default request of 100m and a default limit of 500m. What
+      does a container with neither set get?
+    options:
+      - A request of 100m and a limit of 500m
+      - A limit of 100m and a request of 500m
+      - A request and limit of 500m
+      - Nothing — defaults do not apply to both
+    answer: 0
+    why: >-
+      Request and limit get their own defaults, which is the point: the container is
+      *scheduled* on the request and *capped* at the limit. Setting the defaults the
+      other way round would schedule every container as if it would burst.
+
+  - prompt: >-
+      Can a LimitRange make resource requests mandatory?
+    options:
+      - Yes — a defaultRequest on the limits makes them required in practice
+      - No — only a ResourceQuota can require requests
+      - Yes, by setting max
+      - No — defaults are always optional
+    answer: 0
+    why: >-
+      A defaultRequest means every container comes out of admission with a request
+      set. Strictly it is still a default, but the effect is that requests are
+      always present — which is what the HPA needs as a baseline.
+
+  - prompt: >-
+      A container requests 4Gi of memory and the LimitRange's max is 2Gi. What
+      happens?
+    options:
+      - The container is rejected
+      - The request is capped at 2Gi
+      - The request is allowed and the pod is evicted later
+      - The LimitRange is ignored
+    answer: 0
+    why: >-
+      Rejected at admission. The `max` is a hard ceiling, unlike a ResourceQuota
+      which only counts. That makes a LimitRange the place to enforce a per-container
+      maximum.
+
+  - prompt: >-
+      What is the difference between a LimitRange and a ResourceQuota?
+    options:
+      - A LimitRange is per container; a ResourceQuota is per namespace in total
+      - A LimitRange applies to CPU; a ResourceQuota to memory
+      - A LimitRange is cluster-scoped; a ResourceQuota is namespaced
+      - They are two names for the same thing
+    answer: 0
+    why: >-
+      Per container versus per namespace. A LimitRange says "no container may ask
+      for more than this, and if you do not ask, you get this". A ResourceQuota says
+      "this namespace may not use more than this in total".
+
+  - prompt: >-
+      Which of these can a LimitRange limit, that a ResourceQuota cannot?
+    options:
+      - The number of objects of each kind in the namespace
+      - The memory a single container may request
+      - The total CPU in the namespace
+      - The total storage in the namespace
+    answer: 1
+    why: >-
+      A per-container maximum is a LimitRange's job. Object counts and namespace
+      totals are ResourceQuota's — a LimitRange cannot limit either of those.

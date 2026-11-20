@@ -1,0 +1,92 @@
+kind: Pod
+questions:
+  - prompt: >-
+      In a real cluster, what usually creates a Pod?
+    options:
+      - A controller, because a Pod is the thing controllers create
+      - You, by applying a Pod manifest
+      - The scheduler, which creates Pods on the node it picks
+      - The kubelet, which creates one Pod per container
+    answer: 0
+    why: >-
+      A Pod is a leaf. Nothing manages it, so nothing replaces it, restarts it with a
+      new image, or scales it. The scheduler only *places* Pods that already exist; it
+      does not create them.
+
+  - prompt: >-
+      Two containers in the same Pod can reach each other on localhost. What do they
+      share?
+    options:
+      - Only the network namespace
+      - The network namespace and the volumes they mount
+      - The network namespace, the volumes, and the process namespace
+      - Nothing — they are separate Pods that happen to be co-scheduled
+    answer: 1
+    why: >-
+      Containers in a Pod share a network namespace and the volumes they mount. They
+      do not share a process namespace by default, which is why two containers cannot
+      see each other's processes.
+
+  - prompt: >-
+      What is the default value of a Pod's restartPolicy?
+    options:
+      - Never
+      - OnFailure
+      - Always
+      - It has no default and must always be set
+    answer: 2
+    why: >-
+      A Pod defaults to `Always`, which is right for a service and wrong for a task.
+      A Job has to set `Never` or `OnFailure` explicitly, because a Job that
+      restarted forever would never finish.
+
+  - prompt: >-
+      A bare Pod's node is deleted. What happens to the Pod?
+    options:
+      - Kubernetes reschedules it on another node
+      - Nothing — it is deleted with the node, and its replacement is deleted too
+      - It is rescheduled once the node comes back
+      - The kubelet restarts the containers on the replacement node
+    answer: 1
+    why: >-
+      Nothing manages a bare Pod, so there is no controller to recreate it. This is
+      the single strongest argument for using a Deployment instead.
+
+  - prompt: >-
+      `kubectl run nginx --image=nginx` — what does it create?
+    options:
+      - A Pod
+      - A Deployment with one replica
+      - A Pod and a Service
+      - A Job
+    answer: 0
+    why: >-
+      `kubectl run` creates a bare Pod. It is the quickest way to get a shell in a
+      cluster, and the quickest way to lose the work when the node goes away.
+
+  - prompt: >-
+      A Pod's container exits with code 0 and restartPolicy is Never. What is the
+      Pod's phase?
+    options:
+      - Failed
+      - Succeeded
+      - Completed, which is a phase in its own right
+      - Running, with the container stopped
+    answer: 1
+    why: >-
+      `Succeeded` is the phase for a Pod whose containers all exited successfully.
+      `Completed` is what `kubectl` prints, but the API field is `Succeeded`.
+
+  - prompt: >-
+      A Pod has three containers and one of them is a sidecar proxy. What happens to
+      the Pod when the sidecar crashes?
+    options:
+      - Only the sidecar restarts
+      - The whole Pod restarts, because all containers share a lifecycle
+      - The sidecar is replaced with a new Pod
+      - The sidecar is left in CrashLoopBackOff until someone deletes it
+    answer: 1
+    why: >-
+      Containers in a Pod share a lifecycle. One container restarting restarts the
+      others, which is why a sidecar that cannot start takes the whole Pod down with
+      it — and why sidecars need their own readiness probe.

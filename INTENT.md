@@ -68,7 +68,7 @@ delivered; and which kinds should be in the first working version.
    is more valuable than the exclusion: it is the moment the user learns that
    authoring a Pod by hand means taking over a controller's job.
 
-**Affects:** `architecture.md` §1, §6, §7, §12
+**Affects:** `architecture.md` §1, §6, §7, §13
 
 ---
 
@@ -208,7 +208,7 @@ does not, and the bug appears only in one of them.
 The cost is that the form requires JavaScript. For a local developer tool that is the
 right trade. The CLI covers the no-browser case with the same validation.
 
-**Affects:** `architecture.md` §13.1
+**Affects:** `architecture.md` §14.1
 
 ---
 
@@ -232,7 +232,7 @@ introduced exactly this bug, and it is covered by a test that round-trips `on`,
 The renderer also applies a key preference list, because the schemas list properties
 alphabetically and `image` before `name` inside a container reads wrong.
 
-**Affects:** `architecture.md` §12
+**Affects:** `architecture.md` §13
 
 ---
 
@@ -306,7 +306,7 @@ Deployment and the Service you just wrote.
 This also matches how manifests are actually applied: `kubectl apply -f` on a
 multi-document file is the normal case, and it is atomic per object, not per file.
 
-**Affects:** `architecture.md` §9, §13
+**Affects:** `architecture.md` §9, §14
 
 ---
 
@@ -517,3 +517,53 @@ Writing "a RoleBinding grants a role to a subject, so both have to exist" and
 checked neither. Both are now rules.
 
 **Affects:** `architecture.md` §9, §11.3, §3 (D15)
+
+---
+
+## 2026-11-20 — Quizzes: every kind gets a self-test
+
+**Asked:** "Can you generate multiple choice interview questions for each kind as well
+and show answers after i attempt them." Follow-up: six to eight questions per kind,
+and the answers revealed immediately per question.
+
+**Decided:** A `quizzes/` package alongside `presets/` and `tutorials/`. Twenty-nine
+kinds have a hand-written quiz of six to eight questions — **206 questions in total**.
+Every other kind gets a derived quiz of one to three questions. The quiz is its own
+collapsible panel between the tutorial and the form, so the flow is read → check
+yourself → build.
+
+**Why:**
+
+1. *The explanation is the point.* A question without a `why` is a test, not a
+   teaching aid. The explanation is required by the loader and validated on load, so
+   a question that teaches nothing cannot be committed.
+
+2. *Questions target misconceptions, not field names.* "Which field holds the
+   container port?" teaches nothing worth teaching. "A Deployment's selector does not
+   match its own pod template — what happens?" is the question that catches the
+   failure this tool exists to prevent. That is what the 206 questions are for.
+
+3. *Options are shuffled server-side.* A quiz whose answer is always in the same
+   place teaches the position rather than the material. The explanations are written
+   to be position-independent so the shuffle costs nothing. Five of the quizzes
+   originally had every answer at index 0 in the source data; that is fixed, and a
+   test now keeps it fixed.
+
+4. *The derived tier is honestly thin, and that is stated.* Scope, required fields
+   and permitted values are recall rather than understanding, and for a `*List` kind
+   the enum question degenerates into `items.*.apiVersion`. It is there so that no
+   kind opens with nothing — not because it is good teaching. The 29 curated
+   quizzes are where the value is, and the panel says how many questions a kind has
+   so the learner can tell a hand-written quiz from a generated one.
+
+5. *Revealing per question, not at the end.* The immediate feedback loop is
+   try → learn → move on, and it means a wrong answer is explained while the
+   learner still has the question in mind. An answer key at the end stops you
+   learning from question 1 before you reach question 5.
+
+6. *The quiz is checked as carefully as the tutorial.* Field paths and kind links in
+   explanations must resolve, no two questions in a quiz may be the same, the
+   answer must not always be in the same position, and the derived generator must
+   produce valid questions for all 213 kinds.
+
+**Affects:** `architecture.md` §12, §3 (D16)

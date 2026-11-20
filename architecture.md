@@ -9,14 +9,17 @@ A form-driven Kubernetes YAML generator with cross-object semantic validation.
   `INTENT.md` that records *why* it was taken.
 - **§4** is the system architecture. The rest of the document walks each layer in
   the order data flows through it.
-- **§14** is the module layout.
-- **§15** records what is built, what is not, and what comes next.
-- **§16** lists the open questions.
+- **§12** is the quiz.
+- **§13** is the renderer.
+- **§14** is the web application.
+- **§15** is the module layout.
+- **§16** records what is built, what is not, and what comes next.
+- **§17** lists the open questions.
 
 `INTENT.md` is the append-only decision log. `architecture.md` is the design of record.
 Neither duplicates the other: this document says *what*, `INTENT.md` says *why*.
 
-Status: **M1 complete** — see §15.
+Status: **M1 complete** — see §16.
 
 ---
 
@@ -48,7 +51,7 @@ semantic engine that understands how Kubernetes objects reference each other.
 
 **Out of scope**
 
-- Applying to a cluster (deferred to M4 — see §15).
+- Applying to a cluster (deferred to M4 — see §16).
 - Custom Resource Definitions authored through the form (the schema for a CRD is
   self-referential; the engine falls back to raw JSON for the recursive part, §6.3).
 - Hosting, accounts, persistence. The tool is local and stateless.
@@ -91,6 +94,7 @@ semantic engine that understands how Kubernetes objects reference each other.
 | D13 | A reference missing from the bundle is not a finding — the bundle is not the cluster | 2026-11-19 |
 | D14 | Tutorials are hand-written Markdown for twenty-nine kinds, with a derived card for the rest | 2026-11-19 |
 | D15 | The tutorial's connections and checks are derived from the checker's own tables | 2026-11-19 |
+| D16 | Quizzes are structured data with a required explanation, and the options are shuffled | 2026-11-20 |
 
 ---
 
@@ -438,7 +442,7 @@ to template** puts the preset back.
 
 Clearing an object also has to drop that object's cached map rows. Otherwise the
 rows reappear on the next render and put the values straight back — the same
-class of bug as the renderer-creates-data one (§14.1).
+class of bug as the renderer-creates-data one (§15.1).
 
 ---
 
@@ -534,7 +538,86 @@ together, so a typo is a failing test rather than a dead link.
 
 ---
 
-## 12. Renderer (`render.py`)
+## 12. Quizzes (`quizzes/`)
+
+A quiz is what turns a tutorial into something you can be *wrong* about. Reading
+about the selector drift teaches you less than being asked what happens when it
+drifts and having to answer.
+
+### 12.1 The shape of a question (D16)
+
+Questions are structured data, not prose, because a quiz has to be scored:
+
+```yaml
+kind: Deployment
+questions:
+  - prompt: >-
+      A Deployment's selector does not match the labels on its own pod
+      template. What happens?
+    options:
+      - The API server rejects the Deployment
+      - The Deployment is accepted and manages no pods at all
+      - The Deployment's existing pods are deleted
+      - The Deployment falls back to selecting pods by name
+    answer: 1
+    why: >-
+      The selector is how the Deployment says which Pods are its own. If it
+      matches nothing, it creates a ReplicaSet that adopts no Pods — and the
+      pods it does create still report as Running, because nothing is wrong
+      with them.
+```
+
+The `why` is **required**. A question without an explanation is a test, not a
+teaching aid — and the explanation is where the learning actually happens.
+
+### 12.2 Two tiers, again
+
+**Curated** — twenty-nine kinds, six to eight questions each: **206 questions**.
+Every one targets a misconception or a silent failure, not a field name. The
+Deployment's selector drift; why a Service should target a *named* port; why
+`restartPolicy: Always` is rejected in a Job; what `targetPort` actually resolves
+to; why a RoleBinding with a missing role is accepted and grants nothing.
+
+**Derived** — every other kind, one to three questions generated from what the
+tool already knows:
+
+| Derived question | Available for |
+|---|---|
+| "Which of these is cluster-scoped?" | all 213 |
+| "Which of these fields is required?" | 146 kinds |
+| "Which of these is a valid value for `<field>`?" | 90 kinds |
+
+The derived tier is recall rather than understanding, and for a `*List` kind the
+enum question degenerates into `items.*.apiVersion`. It exists so that no kind
+opens with nothing. The curated quizzes are where the teaching is.
+
+### 12.3 The interaction
+
+The questions are rendered by the server; the JavaScript only handles the reveal.
+Choosing an option marks that question, shows its verdict and explanation, and —
+if the answer was wrong — also marks the right one. A running score appears, and
+a summary when every question is answered.
+
+Real `<input type="radio">` elements, so keyboard navigation and screen readers
+work without any extra work.
+
+**Options are shuffled server-side.** A quiz whose answer is always in the same
+place teaches the position rather than the material. The explanations are written
+to be position-independent so the shuffle does not break them.
+
+### 12.4 The quiz is checked as carefully as the tutorial
+
+- Every question is validated on load: the answer index must be in range, the
+  options must be unique and non-empty, and the explanation must not be empty.
+- Every field path and kind link in an explanation must resolve, exactly as in
+  the tutorials.
+- No two questions in a quiz may be the same, and the answer must not always be
+  in the same position.
+- The derived generator must produce valid questions for all 213 kinds.
+
+---
+
+## 13. Renderer (`render.py`)
 
 ### 10.1 Key order (D6)
 
@@ -561,7 +644,7 @@ object, so a required field that was never touched is still reported.
 
 ---
 
-## 13. Web application (`app.py`)
+## 14. Web application (`app.py`)
 
 | Route | Purpose |
 |---|---|
@@ -590,7 +673,7 @@ right trade.
 
 ---
 
-## 14. Module layout
+## 15. Module layout
 
 ```
 src/kyamlgen/
@@ -606,12 +689,16 @@ src/kyamlgen/
   tutorials/     the teaching content (§11)
     __init__.py  loader and assembly
     curated/     one Markdown file per kind
+  quizzes/       the self-test content (§12)
+    __init__.py  loader, derived generator, HTML rendering
+    curated/     one YAML file per kind
   app.py         FastAPI routes
-  cli.py         serve / kinds / presets / preset / tutorial / tree / generate / validate
+  cli.py         serve / kinds / presets / preset / tutorial / quiz / tree / generate / validate
   templates/     base.html, index.html, form.html
   static/
     style.css    the whole stylesheet
     formstate.js pure data-path logic, shared by the browser and the Node tests
+    quiz.js      the quiz reveal and scoring
     app.js       renders the form from the widget tree
     picker.js    renders the kind catalogue
 tests/
@@ -621,6 +708,7 @@ tests/
   test_render.py     key ordering, YAML 1.1 quoting, pruning, multi-document output
   test_presets.py    every preset validates; presets use only common fields
   test_tutorials.py  every tutorial's links resolve; every kind has a tutorial
+  test_quizzes.py    every quiz is well formed; every kind has a quiz
   test_api.py        end-to-end HTTP behaviour
   test_javascript.py runs the Node tests below
   js/formstate.test.js  the form's path arithmetic, under `node --test`
@@ -641,7 +729,7 @@ from pytest, so `uv run pytest` still covers the whole project.
 
 ---
 
-## 15. Status and milestones
+## 16. Status and milestones
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -653,10 +741,11 @@ from pytest, so `uv run pytest` still covers the whole project.
 | M5 | Ownership advisories, manifest library, Kustomize export | **partial** — advisories and presets done; library and Kustomize export not started |
 | — | Curated presets for seventeen kinds, with per-field and per-section clearing | **done** (§10) |
 | — | Curated tutorials for twenty-nine kinds, derived tutorials for the rest | **done** (§11) |
+| — | Curated quizzes for twenty-nine kinds (206 questions), derived quizzes for the rest | **done** (§12) |
 
 ---
 
-## 16. Open questions
+## 17. Open questions
 
 1. **Shared-value propagation.** The bundle model lets a Deployment and a Service be
    generated together, but the labels and ports are still typed twice. Should

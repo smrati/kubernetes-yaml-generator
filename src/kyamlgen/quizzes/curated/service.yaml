@@ -1,0 +1,104 @@
+kind: Service
+questions:
+  - prompt: >-
+      How does a Service choose which pods to send traffic to?
+    options:
+      - By pod name
+      - By the labels in spec.selector, matched against the pods' labels
+      - By the namespace of the pod
+      - By the container's port number
+    answer: 1
+    why: >-
+      The selector is a label query, not a list of names. If it matches no pod, the
+      Service is created, gets an IP, and has no endpoints — and nothing errors.
+
+  - prompt: >-
+      A Service has port: 80 and targetPort: 8080. What do those mean?
+    options:
+      - They are the same thing, written two ways
+      - port is what clients connect to; targetPort is the port on the container
+      - port is the container port; targetPort is what clients connect to
+      - port is the node port; targetPort is the cluster port
+    answer: 1
+    why: >-
+      They are frequently different numbers, and the difference is deliberate: the
+      Service owns the port the outside world uses, and the container owns the port it
+      listens on.
+
+  - prompt: >-
+      What is the benefit of setting targetPort to the *name* of a container port?
+    options:
+      - It is resolved at runtime, so the two can never drift apart
+      - It allows more than one container port
+      - It makes the Service faster
+      - It is required when the container port is not 80
+    answer: 0
+    why: >-
+      The Service resolves the name against the pod's declared ports. Change the
+      container's port number and the Service follows — which removes the smallest
+      version of the coupling problem this tool exists to catch.
+
+  - prompt: >-
+      What is the default value of spec.type for a Service?
+    options:
+      - NodePort
+      - ClusterIP
+      - LoadBalancer
+      - ExternalName
+    answer: 1
+    why: >-
+      ClusterIP: a virtual IP inside the cluster, reachable from other pods. NodePort
+      and LoadBalancer reach outside the cluster; ExternalName is a DNS alias and
+      creates no proxy at all.
+
+  - prompt: >-
+      What does a Service with spec.clusterIP: None do?
+    options:
+      - It gets no IP address
+      - It is headless — DNS returns the pod IPs directly, with no proxy
+      - It only routes to pods in the same namespace
+      - It is rejected
+    answer: 1
+    why: >-
+      A headless Service is how you get a StatefulSet's stable DNS names working. The
+      client resolves the name itself and talks to a pod directly.
+
+  - prompt: >-
+      A Service of type NodePort without an explicit nodePort gets one automatically.
+      In what range?
+    options:
+      - 1–65535
+      - 30000–32767
+      - 1024–49151
+      - 8000–8999
+    answer: 1
+    why: >-
+      The default NodePort range is 30000–32767. The wider 1024–49151 range is what
+      kube-proxy's `--service-node-port-range` can be widened to, and the default
+      is deliberately narrow to avoid colliding with other services.
+
+  - prompt: >-
+      What does a Service of type ExternalName do?
+    options:
+      - It creates a DNS CNAME to another hostname and proxies to it
+      - It creates a DNS CNAME to another hostname and does not proxy at all
+      - It exposes a pod outside the cluster
+      - It is an alias for a ClusterIP
+    answer: 1
+    why: >-
+      ExternalName is a DNS alias and nothing more. Traffic goes wherever the external
+      name resolves — it does not pass through the cluster at all, which is why no
+      port or selector makes sense.
+
+  - prompt: >-
+      A Service's selector matches pods in another namespace. Does that work?
+    options:
+      - Yes, a Service selects across namespaces
+      - No — a Service only selects pods in its own namespace
+      - Only if the namespaces have the same name
+      - Only for headless Services
+    answer: 1
+    why: >-
+      A Service selects pods in its own namespace only. Reaching pods elsewhere
+      needs a Service in that namespace, or an ExternalName Service pointing at a
+      hostname.

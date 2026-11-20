@@ -1,0 +1,90 @@
+kind: ClusterRoleBinding
+questions:
+  - prompt: >-
+      What scope does a ClusterRoleBinding grant?
+    options:
+      - The whole cluster
+      - Only its own namespace
+      - Only the namespaces it lists
+      - Only the resource it names
+    answer: 0
+    why: >-
+      The whole cluster, whatever namespace the subject is in. This is the most
+      dangerous object in RBAC, and the one that most often appears by accident.
+
+  - prompt: >-
+      The same ClusterRole is bound by a ClusterRoleBinding and by a RoleBinding in
+      namespace `app`. What is the difference?
+    options:
+      - The first grants cluster-wide, the second only inside `app`
+      - The first grants more permissions
+      - The first requires the subject to be in `default`
+      - There is no difference
+    answer: 0
+    why: >-
+      Only the scope. The permissions are identical; the binding decides where they
+      apply. Two manifests that look almost the same can differ by the entire
+      cluster.
+
+  - prompt: >-
+      Can you change the roleRef of a ClusterRoleBinding?
+    options:
+      - No — it is immutable; delete and recreate
+      - Yes, and it takes effect immediately
+      - Yes, if the new role has the same name
+      - Yes, with an annotation
+    answer: 0
+    why: >-
+      Immutable, for the same reason a RoleBinding's is: the roleRef is part of the
+      binding's identity. Changing it would silently repoint who holds which
+      permissions, cluster-wide.
+
+  - prompt: >-
+      A subject in a ClusterRoleBinding has no namespace. What happens?
+    options:
+      - It is treated as being in the default namespace
+      - The binding is rejected
+      - The subject is ignored
+      - It matches every namespace
+    answer: 0
+    why: >-
+      It means the `default` namespace — which is almost never what was meant, and
+      is a quiet way for the binding to do less than intended.
+
+  - prompt: >-
+      Which of these subjects can a ClusterRoleBinding name?
+    options:
+      - A ServiceAccount in any namespace, a user or a group
+      - Only a ServiceAccount
+      - Only a user
+      - Only a ServiceAccount in kube-system
+    answer: 0
+    why: >-
+      Any of them. Users and groups only resolve if the cluster has an external
+      identity provider configured; otherwise those subjects match nobody.
+
+  - prompt: >-
+      A ClusterRoleBinding names a ClusterRole that does not exist. What happens?
+    options:
+      - The API server rejects it
+      - It is accepted and grants nothing until the role appears
+      - It grants cluster-admin instead
+      - It is deleted
+    answer: 1
+    why: >-
+      Accepted, granting nothing. The name is just a string, so there is nothing to
+      validate — and the symptom is an unexplained "forbidden" for whoever the subject
+      was.
+
+  - prompt: >-
+      What should you check before creating a ClusterRoleBinding?
+    options:
+      - Whether the subject really needs cluster-wide access
+      - Whether the cluster has a default namespace
+      - Whether the roleRef uses the right apiGroup
+      - Whether the subject is in kube-system
+    answer: 0
+    why: >-
+      Whether it needs to be cluster-wide at all. Most permissions belong in one
+      namespace, and a ClusterRoleBinding where a RoleBinding would do is the most
+      common way a cluster gets over-permissioned.

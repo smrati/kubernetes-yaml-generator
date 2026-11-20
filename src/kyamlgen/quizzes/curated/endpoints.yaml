@@ -1,0 +1,87 @@
+kind: Endpoints
+questions:
+  - prompt: >-
+      Who normally writes an Endpoints object?
+    options:
+      - The Service controller, matching the Service's selector against pod labels
+      - The kubelet, as each pod starts
+      - You
+      - The scheduler
+    answer: 0
+    why: >-
+      The Service controller watches the Service's selector and rewrites the Endpoints
+      object whenever the set of matching pods changes. You rarely write one.
+
+  - prompt: >-
+      You create an Endpoints object next to a Service that has a selector. What
+      happens?
+    options:
+      - Your list is kept and merged with the pods
+      - The controller manages it and replaces your list within seconds
+      - The Endpoints object is rejected
+      - Both are merged, with yours taking precedence
+    answer: 1
+    why: >-
+      The controller owns it. To hand-write endpoints, the Service must have no
+      selector at all — otherwise the controller overwrites you.
+
+  - prompt: >-
+      What does an Endpoints object contain?
+    options:
+      - A list of pod IP addresses and their ports
+      - A list of pod names
+      - A list of service DNS names
+      - A list of node IP addresses
+    answer: 0
+    why: >-
+      The addresses of the pods behind the Service, with the ports they expose. It
+      is what the kube-proxy reads to program its rules.
+
+  - prompt: >-
+      What is the practical limit on how many addresses one Endpoints object holds?
+    options:
+      - 100
+      - 1000
+      - 10,000
+      - There is no limit
+    answer: 1
+    why: >-
+      A thousand. That limit is one of the reasons EndpointSlice exists — it holds a
+      hundred addresses per slice and a Service can have many slices.
+
+  - prompt: >-
+      What replaced Endpoints for new tooling?
+    options:
+      - EndpointSlice
+      - The Service's status.endpoints field
+      - EndpointSliceList, which is a different thing
+      - Nothing — Endpoints is still the primary API
+    answer: 0
+    why: >-
+      EndpointSlice is the modern API. Endpoints is still generated for
+      compatibility, and still works, but new tooling should use EndpointSlice.
+
+  - prompt: >-
+      When is writing an Endpoints object by hand reasonable?
+    options:
+      - When the pods behind a Service have no labels to select on
+      - When you want to add a second Service to the same pods
+      - When you want to add health checks
+      - Never, under any circumstances
+    answer: 0
+    why: >-
+      It is the one case where manual endpoints make sense: a Service with no
+      selector, pointing at pods that exist but carry no matching labels.
+
+  - prompt: >-
+      A Service has a selector that matches no pods. What does its Endpoints object
+      contain?
+    options:
+      - An empty list
+      - The addresses of every pod in the namespace
+      - The Service's own ClusterIP
+      - It does not exist
+    answer: 0
+    why: >-
+      An empty list — which is exactly the symptom of a selector that does not
+      match. The Service exists and has an IP; it just has nothing behind it.

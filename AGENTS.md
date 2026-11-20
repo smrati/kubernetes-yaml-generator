@@ -33,7 +33,7 @@ content here.
 
 ## Current state
 
-M1 complete; M2 and M3 substantially done. `architecture.md` §15 has the honest
+M1 complete; M2 and M3 substantially done. `architecture.md` §16 has the honest
 status table. M4 (server dry-run against a real cluster) is the only milestone
 blocked on infrastructure.
 
@@ -47,6 +47,7 @@ blocked on infrastructure.
 - `uv run kyamlgen presets` — the kinds that have a hand-written template.
 - `uv run kyamlgen preset Deployment` — print one template.
 - `uv run kyamlgen tutorial Deployment` — print the tutorial for a kind.
+- `uv run kyamlgen quiz Deployment` — print the questions, then the answer key.
 - `uv run kyamlgen tree <Kind> --api-version <group/version>` — the widget tree as
   JSON.
 - `uv run kyamlgen generate <Kind> --api-version <group/version> --values file.json`
@@ -95,8 +96,9 @@ Never commit silently: show the message, then commit. Do not push unless asked.
 | `render.py` | Pruning, key ordering, YAML output |
 | `presets/` | Hand-written starting-point manifests, one YAML file per kind |
 | `tutorials/` | Hand-written tutorials, one Markdown file per kind, plus the derived ones |
+| `quizzes/` | Hand-written quizzes, one YAML file per kind, plus the derived ones |
 | `app.py` | FastAPI routes |
-| `cli.py` | `serve` / `kinds` / `presets` / `preset` / `tutorial` / `tree` / `generate` / `validate` |
+| `cli.py` | `serve` / `kinds` / `presets` / `preset` / `tutorial` / `quiz` / `tree` / `generate` / `validate` |
 | `static/formstate.js` | The form's data-path logic — shared by the browser and the Node tests |
 
 ## Ground rules — do not relax these
@@ -147,10 +149,15 @@ Never commit silently: show the message, then commit. Do not push unless asked.
     kind's form is a failing test, not a dead link. When you write
     `field:spec.ports[].port`, `spec.ports[].port` must be a real path in that
     kind's widget tree.
+14. **A question without an explanation is not a question.** The `why` is
+    required and validated on load. A quiz question targets a misconception or a
+    silent failure, not a field name — "which field holds the container port?"
+    teaches nothing. The options are shuffled before they are rendered, so the
+    answer must not always sit in the same place in the source data either.
 
 ## Tests
 
-`uv run pytest` runs everything: 211 Python tests, plus a wrapper that runs the 19
+`uv run pytest` runs everything: 336 Python tests, plus a wrapper that runs the 19
 JavaScript tests under `node --test`. One command covers the whole project.
 
 | File | Covers |
@@ -161,6 +168,7 @@ JavaScript tests under `node --test`. One command covers the whole project.
 | `test_render.py` | Key ordering, YAML 1.1 quoting, pruning, multi-document output |
 | `test_presets.py` | **Every preset validates cleanly**; presets use only common fields; the Deployment and Service presets form a clean bundle |
 | `test_tutorials.py` | **Every tutorial's field paths and kind links resolve**; every kind in the bundle has a tutorial; the rule table covers every check |
+| `test_quizzes.py` | **Every quiz is well formed**; every kind in the bundle has a quiz; answers are not always in the same position |
 | `test_api.py` | End-to-end HTTP behaviour |
 | `test_javascript.py` | Runs `tests/js/formstate.test.js` under `node --test` |
 | `js/formstate.test.js` | The form's path arithmetic: `getIn`, `setIn`, `deleteIn`, `readContainer`, `ensureContainer` |

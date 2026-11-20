@@ -1,0 +1,108 @@
+kind: NetworkPolicy
+questions:
+  - prompt: >-
+      A pod is selected by a NetworkPolicy and no ingress rule allows it. What
+      happens to traffic to it?
+    options:
+      - The traffic is allowed, because policies only add rules
+      - The traffic is denied
+      - The traffic is logged and allowed
+      - The policy is ignored
+    answer: 1
+    why: >-
+      A NetworkPolicy is allow-list. Selecting a pod with a policy that has ingress
+      rules isolates it for ingress: anything not explicitly allowed is denied.
+
+  - prompt: >-
+      A NetworkPolicy has only ingress rules. Is egress from the selected pods
+      allowed?
+    options:
+      - Yes, all egress is allowed
+      - No, all egress is denied
+      - Only DNS is allowed
+      - Only egress to other selected pods is allowed
+    answer: 0
+    why: >-
+      Egress is only restricted if the policy includes `Egress` in its policyTypes.
+      This catches people out constantly: a policy that looks like a lockdown is not
+      one.
+
+  - prompt: >-
+      You add one NetworkPolicy to a namespace. What happens to the pods it does not
+      select?
+    options:
+      - They are unaffected
+      - They are also isolated, because the policy applies to the whole namespace
+      - They are deleted
+      - They are isolated for egress only
+    answer: 0
+    why: >-
+      A policy that selects no pods isolates nothing. But a policy that selects some
+      pods isolates *those* pods — and for a given direction, one policy selecting a
+      pod is enough to isolate it. Other pods are untouched.
+
+  - prompt: >-
+      What is the effect of adding a policy that selects pods and has only an egress
+      rule?
+    options:
+      - Those pods lose all ingress too
+      - Those pods keep all ingress, and their egress is restricted
+      - The whole namespace is isolated
+      - Nothing changes until the pods are recreated
+    answer: 1
+    why: >-
+      Ingress and egress are isolated independently. A pod is ingress-isolated if any
+      policy selects it and has ingress rules; egress-isolated if any policy selects
+      it and has egress rules.
+
+  - prompt: >-
+      You restrict egress with a NetworkPolicy. Your application then cannot resolve
+      DNS. What do you need to allow?
+    options:
+      - UDP port 53 to the kube-dns Service
+      - TCP port 53 to every pod
+      - ICMP
+      - The ClusterIP of the API server on port 443
+    answer: 0
+    why: >-
+      DNS is usually UDP on port 53 to the cluster DNS service. This is the first
+      thing that breaks when you add an egress policy, and the error is
+      "connection refused" on everything rather than anything about DNS.
+
+  - prompt: >-
+      Does a NetworkPolicy isolate pods from each other on the network?
+    options:
+      - Yes, it is a firewall
+      - No — it depends entirely on the CNI plugin implementing it
+      - Yes, but only within a namespace
+      - No, NetworkPolicy only controls ingress
+    answer: 1
+    why: >-
+      A NetworkPolicy object is a request. Whether anything enforces it depends on
+      the network plugin — some enforce it, some ignore it, and on some managed
+      clusters the default plugin is a pass-through. The object is not evidence that
+      the restriction is in force.
+
+  - prompt: >-
+      What does podSelector in a NetworkPolicy match against?
+    options:
+      - The labels on the pods the policy applies to
+      - The labels on the namespaces the policy applies to
+      - The labels on the policy's own target pods, via an annotation
+      - The pod names
+    answer: 0
+    why: >-
+      The same label matching a Service uses. A policy with an empty podSelector
+      selects every pod in the namespace — which is how you write a default-deny.
+
+  - prompt: >-
+      Which statement about NetworkPolicy and namespaces is true?
+    options:
+      - A NetworkPolicy never affects other namespaces
+      - A NetworkPolicy applies only to pods in its own namespace
+      - A NetworkPolicy applies cluster-wide
+      - A NetworkPolicy applies to the namespace named in its spec
+    answer: 1
+    why: >-
+      A NetworkPolicy is namespaced, and it selects pods in its own namespace. That
+      is why default-deny is usually written once per namespace.

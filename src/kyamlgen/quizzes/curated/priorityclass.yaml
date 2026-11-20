@@ -1,0 +1,91 @@
+kind: PriorityClass
+questions:
+  - prompt: >-
+      What does a PriorityClass's value mean?
+    options:
+      - A number; higher means more important when pods are waiting for capacity
+      - A queue position, like a nice value
+      - A weight applied to the pod's CPU share
+      - The order in which pods are evicted
+    answer: 0
+    why: >-
+      A plain integer. The scheduler admits pending pods in priority order when there
+      is not enough capacity for all of them.
+
+  - prompt: >-
+      A cluster has plenty of free CPU and your pod has a very high priority. What
+      happens?
+    options:
+      - It is scheduled immediately, like any other pod
+      - It waits for the highest priority pods first
+      - It is rejected
+      - It preempts a running pod
+    answer: 0
+    why: >-
+      Priority only matters when pods are *waiting*. With spare capacity every pod
+      starts immediately whatever its priority, which is worth knowing before you
+      think a priority class is a performance knob.
+
+  - prompt: >-
+      What does preemptionPolicy: PreemptLowerPriority do?
+    options:
+      - Queues the pod until lower-priority pods finish
+      - Evicts running pods with lower priority to make room
+      - Deletes the pod and retries
+      - Restricts the pod to lower-priority nodes
+    answer: 1
+    why: >-
+      It evicts lower-priority *running* pods. Those pods go back to Pending and are
+      rescheduled elsewhere, which is disruptive — and is why preemption is a
+      deliberate setting rather than the default.
+
+  - prompt: >-
+      Can you change a pod's priority after it is created?
+    options:
+      - No — the priority is read at creation and cannot be changed
+      - Yes, by patching the pod
+      - Yes, by changing the PriorityClass
+      - Only if the pod is not yet running
+    answer: 0
+    why: >-
+      No. Priority is read at creation, which is what stops a pod from being
+      deprioritised after it has been admitted — and what means the priority class
+      must be right the first time.
+
+  - prompt: >-
+      What does globalDefault: true on a PriorityClass do?
+    options:
+      - Makes it the priority for pods that do not name a class
+      - Makes it apply to every namespace
+      - Makes it the highest priority in the cluster
+      - Makes it apply to system pods only
+    answer: 0
+    why: >-
+      It becomes the default for pods that do not set `priorityClassName`. Two
+      globalDefault classes is a conflict the API server rejects, so it is worth
+      checking when a default seems to have changed.
+
+  - prompt: >-
+      What are the system priority classes Kubernetes ships with?
+    options:
+      - system-cluster-critical and system-node-critical
+      - critical and high
+      - default and standard
+      - none — you must create your own
+    answer: 0
+    why: >-
+      Two, reserved for control-plane components so they are not evicted by ordinary
+      workloads. Creating a class with one of those names is rejected.
+
+  - prompt: >-
+      Can a pod's priority exceed the value of the PriorityClass it names?
+    options:
+      - No — the class's value is the pod's priority
+      - Yes, if the pod sets priority explicitly
+      - Yes, up to the system-node-critical value
+      - Only for system pods
+    answer: 0
+    why: >-
+      The class's value is the pod's priority. There is no separate per-pod override
+      — which is deliberate, because a pod could otherwise claim a priority it did
+      not have the standing to claim.

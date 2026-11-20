@@ -1,0 +1,73 @@
+kind: ReplicationController
+questions:
+  - prompt: >-
+      Which API group does a ReplicationController live in?
+    options:
+      - apps/v1
+      - v1
+      - extensions/v1beta1
+      - batch/v1
+    answer: 1
+    why: >-
+      It is a core `v1` object, one of the oldest in the API. It predates the whole
+      apps group.
+
+  - prompt: >-
+      How does a ReplicationController select its pods?
+    options:
+      - By label equality only
+      - By matchLabels and matchExpressions
+      - By pod name
+      - By node
+    answer: 0
+    why: >-
+      Its selector is a plain map of label values. There is no matchLabels and
+      matchExpressions split — set-based selection is not available.
+
+  - prompt: >-
+      Why is a ReplicationController's selector immutable?
+    options:
+      - Because changing it would make it adopt or abandon pods
+      - Because the API server cannot compare two label maps
+      - Because its pods' labels are derived from it
+      - Because it is deprecated
+    answer: 0
+    why: >-
+      Same reason as a ReplicaSet's: the selector says which pods the controller
+      owns, and changing it would change ownership.
+
+  - prompt: >-
+      What is the modern replacement for a ReplicationController?
+    options:
+      - A StatefulSet
+      - A Deployment
+      - A DaemonSet
+      - A ReplicaSet
+    answer: 1
+    why: >-
+      A Deployment. It does everything a ReplicationController does, and adds the
+      rolling update and the revision history.
+
+  - prompt: >-
+      When will you actually meet a ReplicationController?
+    options:
+      - Whenever you want a pod kept alive
+      - In clusters migrated from the extensions/v1beta1 era and never updated
+      - When you need stable pod names
+      - When you need a rolling update
+    answer: 1
+    why: >-
+      Almost never in a cluster you built yourself. If you find one, something was
+      migrated from the old extensions API and never brought forward.
+
+  - prompt: >-
+      What does a ReplicationController have that a ReplicaSet does not?
+    options:
+      - Nothing that matters — a ReplicaSet is a strict superset
+      - Support for matchExpressions
+      - A rolling update strategy
+      - The ability to scale on CPU
+    answer: 0
+    why: >-
+      A ReplicaSet can do everything a ReplicationController can, and more. The
+      ReplicationController exists for compatibility, not capability.

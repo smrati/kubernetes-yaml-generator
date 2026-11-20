@@ -1,0 +1,88 @@
+kind: EndpointSlice
+questions:
+  - prompt: >-
+      What does an EndpointSlice add that an Endpoints object cannot express?
+    options:
+      - Per-endpoint conditions, such as ready, serving and terminating
+      - The pod's image
+      - The namespace
+      - The Service's cluster IP
+    answer: 0
+    why: >-
+      Conditions are the whole point. A pod that is going away can be `serving: true,
+      terminating: true` — still worth traffic, but on its way out. That is what makes
+      a rolling update seamless.
+
+  - prompt: >-
+      An endpoint is marked ready: false but serving: true. What does that mean?
+    options:
+      - It is broken and should get no traffic
+      - It is ready to stop receiving traffic but should keep serving until drained
+      - It is not yet assigned an IP
+      - It belongs to a different namespace
+    answer: 1
+    why: >-
+      `serving` says it can still answer; `ready` says it should stop being given
+      new connections. The combination is how a terminating pod is drained rather
+      than dropped.
+
+  - prompt: >-
+      How many addresses can one EndpointSlice hold?
+    options:
+      - 100
+      - 1000
+      - 10
+      - 50
+    answer: 0
+    why: >-
+      A hundred, and a Service may have several slices. That is how the API scales
+      past the thousand-address limit of Endpoints.
+
+  - prompt: >-
+      What does addressType decide?
+    options:
+      - Whether the address is an IPv4, an IPv6 or a hostname
+      - Whether the endpoint is ready
+      - Which protocol the endpoint speaks
+      - Whether the endpoint is in the cluster
+    answer: 0
+    why: >-
+      It is IPv4, IPv6 or FQDN, and it is immutable once set — changing it would
+      change the meaning of every address in the slice.
+
+  - prompt: >-
+      Who normally maintains EndpointSlices?
+    options:
+      - The Service controller, alongside the Endpoints object
+      - The kubelet
+      - The scheduler
+      - You
+    answer: 0
+    why: >-
+      The same controller that maintains Endpoints. Both exist for compatibility with
+      older clients and with kube-proxy implementations that read one rather than the
+      other.
+
+  - prompt: >-
+      Why did EndpointSlice exist at all?
+    options:
+      - To express per-endpoint conditions and to scale past Endpoints' size limit
+      - To replace the Service
+      - To add TLS termination
+      - To make DNS faster
+    answer: 0
+    why: >-
+      Two reasons: a thousand addresses was a real ceiling, and there was nowhere to
+      put a per-endpoint condition like "terminating but still serving".
+
+  - prompt: >-
+      You write an EndpointSlice next to a Service that has a selector. What happens?
+    options:
+      - The controller manages it and replaces your slice
+      - Your slice is merged with the generated one
+      - The slice is rejected
+      - The Service stops generating endpoints
+    answer: 0
+    why: >-
+      Same rule as Endpoints: the controller owns slices for a Service that has a
+      selector. Manual slices only work alongside a Service with no selector.

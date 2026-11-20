@@ -1,0 +1,93 @@
+kind: ClusterRole
+questions:
+  - prompt: >-
+      What makes a ClusterRole different from a Role?
+    options:
+      - It is not tied to a namespace
+      - It can grant more permissions
+      - It can only be used by cluster administrators
+      - It is cluster-scoped
+    answer: 0
+    why: >-
+      A Role is bound to one namespace; a ClusterRole is not. The *permissions* are
+      the same shape — the difference is where the grant lands, which is decided by
+      the binding, not by the role.
+
+  - prompt: >-
+      You bind a ClusterRole with a RoleBinding in namespace `staging`. What does it
+      grant?
+    options:
+      - Nothing, because a ClusterRole needs a ClusterRoleBinding
+      - The ClusterRole's permissions, cluster-wide
+      - The ClusterRole's permissions, inside `staging` only
+      - Only read permissions
+    answer: 2
+    why: >-
+      Inside `staging` only. This is the middle ground that makes ClusterRoles
+      useful: the same role, read-everywhere and read-in-one-place, differ only in
+      the binding that references them.
+
+  - prompt: >-
+      What does the built-in cluster-admin ClusterRole grant?
+    options:
+      - Everything, cluster-wide
+      - Read access to everything
+      - Write access to namespaced resources only
+      - Access to the control plane only
+    answer: 0
+    why: >-
+      `*` on `*` on `*`. It can read every Secret in every namespace, which means
+      every credential in the cluster. It is the right answer surprisingly rarely.
+
+  - prompt: >-
+      What is aggregation in RBAC?
+    options:
+      - A labelled role joins an aggregate role, widening it
+      - Roles are grouped by namespace
+      - A binding may list several roles
+      - The API server caches role lookups
+    answer: 0
+    why: >-
+      A role with the label `rbac.authorization.k8s.io/aggregate-to-view: "true"`
+      joins the built-in `view` role. It is how a custom permission quietly widens
+      `view` for everybody who has it.
+
+  - prompt: >-
+      Can a ClusterRole grant access to nodes?
+    options:
+      - Yes — cluster-scoped resources need a ClusterRole
+      - No, nothing can grant node access
+      - Yes, but only from the kube-system namespace
+      - Only if a Node authorizer is enabled
+    answer: 0
+    why: >-
+      Yes. A Role cannot grant access to cluster-scoped resources; a ClusterRole
+      can, whether it is bound cluster-wide or in one namespace.
+
+  - prompt: >-
+      What does a ClusterRole with an empty rules list grant?
+    options:
+      - Nothing
+      - Read access to everything
+      - Full access to its namespace
+      - Access to the pods it selects
+    answer: 0
+    why: >-
+      Nothing, and silently. The same trap as a Role: an empty rule body looks
+      valid and grants nothing, so the subject gets "forbidden" with no obvious
+      cause.
+
+  - prompt: >-
+      You need read access to Pods in one namespace and to Nodes cluster-wide. How
+      many roles?
+    options:
+      - Two — one ClusterRole for the Pods, bound namespaced, and one for the Nodes,
+        bound cluster-wide
+      - One ClusterRole, bound cluster-wide
+      - One ClusterRole, bound namespaced, plus a separate grant for Nodes
+      - Two ClusterRoles, both bound cluster-wide
+    answer: 0
+    why: >-
+      Two bindings, and the split matters. One role bound cluster-wide would also
+      give the subject Pod access in every other namespace, which is more than you
+      asked for. The role holds the permissions; the binding holds the scope.
